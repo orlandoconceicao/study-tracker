@@ -28,9 +28,9 @@ services:
 
   backend:
     build:
-      context: .
+      context: ./backend
     env_file:
-      - .env
+      - ./backend/.env
     environment:
       DATABASE_HOST: db
       DATABASE_PORT: "5432"
@@ -38,7 +38,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     volumes:
-      - .:/app
+      - ./backend:/app
     ports:
       - "8000:8000"
     depends_on:
@@ -64,9 +64,9 @@ services:
 
   celery_worker:
     build:
-      context: .
+      context: ./backend
     env_file:
-      - .env
+      - ./backend/.env
     environment:
       DATABASE_HOST: db
       DATABASE_PORT: "5432"
@@ -74,7 +74,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     command: celery -A config worker -l info
     volumes:
-      - .:/app
+      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
@@ -85,9 +85,9 @@ services:
 
   celery_beat:
     build:
-      context: .
+      context: ./backend
     env_file:
-      - .env
+      - ./backend/.env
     environment:
       DATABASE_HOST: db
       DATABASE_PORT: "5432"
@@ -95,7 +95,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     command: celery -A config beat -l info
     volumes:
-      - .:/app
+      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy

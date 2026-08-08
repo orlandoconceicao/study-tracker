@@ -1,58 +1,59 @@
-# Environment variables and local configuration
+# Secrets and local environment (keep templates)
 .env
 .env.*
 !.env.example
-frontend/.env
+**/.env
+**/.env.*
+!**/.env.example
 
-# Python virtual environments
+# Python / Django
 .venv/
+.venv-*/
 venv/
 env/
 ENV/
-
-# Python bytecode and tooling
 __pycache__/
 *.py[cod]
 *$py.class
 .Python
 .python-version
 pip-wheel-metadata/
-
-# Django
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
 media/
 staticfiles/
+celerybeat-schedule*
 
-# Tests and coverage
+# Tests, coverage and Python tools
 .pytest_cache/
 .coverage
 .coverage.*
 coverage.xml
 htmlcov/
-.pytest_cache/
 .tox/
 .nox/
-
-# Type checkers, linters and formatters
 .mypy_cache/
 .pyre/
 .pytype/
 .ruff_cache/
 
-# Frontend test and build reports
-frontend/node_modules/
-frontend/coverage/
-frontend/dist/
+# Node / React / Vite
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# IDEs and editors
+# Editors and operating systems
 .vscode/
 .idea/
 *.code-workspace
-
-# Operating system files
 .DS_Store
 Thumbs.db
 Desktop.ini

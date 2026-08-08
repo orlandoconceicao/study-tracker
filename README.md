@@ -1,12 +1,30 @@
-# Study Tracker API
+# Study Tracker
 
-API REST para acompanhar estudos diários, construída com Django REST Framework e PostgreSQL.
+Aplicação fullstack para acompanhar estudos diários. O back-end usa Django REST Framework e PostgreSQL; o front-end usa React com Vite.
 
-## Arquitetura
+## Estrutura
 
-`users` contém o usuário customizado e autenticação. `studies` concentra registros, filtros e serviços de calendário/estatísticas. `notifications` armazena a preferência de lembrete, pronta para ser consumida futuramente por Celery + Redis. As views só fazem a orquestração HTTP; regras de agregação ficam em `studies/services.py`.
+```text
+.
+├── backend/                 # Django, Celery, testes e dependências Python
+│   ├── config/
+│   ├── notifications/
+│   ├── studies/
+│   ├── tests/
+│   ├── users/
+│   ├── manage.py
+│   ├── requirements.txt
+│   └── .env.example
+├── frontend/                # React/Vite
+│   ├── public/
+│   ├── src/
+│   └── package.json
+├── .gitignore
+├── docker-compose.yml
+└── README.md
+```
 
-Relações: `User 1:N Study` e `User 1:1 UserNotificationSettings`.
+`users` contém o usuário customizado e autenticação. `studies` concentra registros, filtros e serviços de calendário/estatísticas. `notifications` armazena as preferências e tarefas de lembrete. As rotas e regras de negócio não foram alteradas pela reorganização.
 
 ## Endpoints
 
@@ -22,63 +40,59 @@ Relações: `User 1:N Study` e `User 1:1 UserNotificationSettings`.
 | GET | `/api/studies/statistics/` | Totais e sequências |
 | GET, PATCH | `/api/notifications/settings/` | Lembrete do usuário |
 
-Use `Authorization: Bearer <access_token>` em todas as rotas protegidas. A documentação interativa está em `/api/docs/`.
+Use `Authorization: Bearer <access_token>` nas rotas protegidas. A documentação interativa está em `/api/docs/`.
 
-## Execução
+## Execução local
 
-1. Crie um ambiente virtual e instale `pip install -r requirements.txt`.
-2. Copie `.env.example` para `.env` e informe credenciais PostgreSQL.
-3. Execute `python manage.py makemigrations` e `python manage.py migrate`.
-4. Inicie com `python manage.py runserver`.
-
-Filtros disponíveis em estudos: `start_date`, `end_date`, `subject`, `month` e `year`.
-
-## Executando com Docker
-
-1. Copie `.env.example` para `.env` e ajuste as variáveis necessárias. Para o envio de e-mails, informe as credenciais SMTP somente no `.env`.
-2. Inicie todos os serviços:
-
-   ```bash
-   docker compose up --build
-   ```
-
-O Docker Compose inicia PostgreSQL, Redis, Django, Vite, Celery Worker e Celery Beat. Dentro dos containers, Django acessa o banco pelo serviço `db` e o broker pelo serviço `redis`; essas configurações são aplicadas pelo Compose sem alterar o seu `.env` local.
-
-## Testes automatizados
-
-Instale as dependências de desenvolvimento do backend:
+Back-end (a partir da raiz):
 
 ```powershell
+cd backend
+Copy-Item .env.example .env
+python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe manage.py migrate
+.\.venv\Scripts\python.exe manage.py runserver
 ```
 
-Execute os testes e a cobertura do backend:
+Preencha `backend/.env` antes de iniciar. O Django lê esse arquivo com base no novo diretório do projeto.
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest
-.\.venv\Scripts\python.exe -m pytest --cov --cov-report=term-missing --cov-report=html
-```
-
-No frontend, instale as dependências e execute a suíte:
+Front-end, em outro terminal:
 
 ```powershell
 cd frontend
+Copy-Item .env.example .env
 npm install
-npm test
-npm run test:coverage
+npm run dev
 ```
 
-Os testes usam SQLite em memória, backend de e-mail local e mocks para integrações; PostgreSQL, Redis e SMTP não precisam estar ativos.
+Por padrão, `VITE_API_URL` aponta para `http://127.0.0.1:8000/api`. Os origins locais `3000` e `5173` já são aceitos pelo CORS do back-end.
 
-- Frontend: http://localhost:5173
-- Backend: http://localhost:8000
-- Swagger: http://localhost:8000/api/docs/
+## Docker
 
-Para parar os serviços, use `docker compose down`. Os dados do PostgreSQL permanecem no volume `postgres_data`; para removê-los intencionalmente, use `docker compose down -v`.
-
-Para acompanhar os logs, use:
+O Compose permanece na raiz e usa `backend/` e `frontend/` como contextos de build separados:
 
 ```bash
-docker compose logs -f
-docker compose logs -f backend celery_worker celery_beat
+docker compose --env-file backend/.env up --build
 ```
+
+Ele inicia PostgreSQL, Redis, Django, Vite, Celery Worker e Celery Beat. Para validar a configuração sem iniciar containers:
+
+```bash
+docker compose --env-file backend/.env config --quiet
+```
+
+## Testes e verificações
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run
+.\.venv\Scripts\python.exe -m pytest
+
+cd ..\frontend
+npm test
+npm run build
+```
+
+Serviços locais: front-end em http://localhost:5173, back-end em http://localhost:8000 e Swagger em http://localhost:8000/api/docs/.
