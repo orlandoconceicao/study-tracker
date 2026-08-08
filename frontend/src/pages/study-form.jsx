@@ -41,17 +41,17 @@ export default function StudyForm() {
     <>
       <h1>{id ? "Editar estudo" : "Registrar estudo"}</h1>
       <form onSubmit={submit}>
-        <label>Data</label>
-        <input type="date" required value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
+        <label htmlFor="study-date">Data</label>
+        <input id="study-date" type="date" required value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
 
-        <label>Duração (minutos)</label>
-        <input type="number" min="1" required value={form.duration_minutes} onChange={(event) => setForm({ ...form, duration_minutes: event.target.value })} />
+        <label htmlFor="study-duration">Duração (minutos)</label>
+        <input id="study-duration" type="number" min="1" required value={form.duration_minutes} onChange={(event) => setForm({ ...form, duration_minutes: event.target.value })} />
 
-        <label>Assunto</label>
-        <input type="text" required value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} />
+        <label htmlFor="study-subject">Assunto</label>
+        <input id="study-subject" type="text" required value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} />
 
-        <label>Observação</label>
-        <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+        <label htmlFor="study-notes">Observação</label>
+        <textarea id="study-notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
 
         {error && <p className="error">{error}</p>}
         <button type="submit">Salvar estudo</button>

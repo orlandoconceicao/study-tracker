@@ -44,6 +44,32 @@ Filtros disponíveis em estudos: `start_date`, `end_date`, `subject`, `month` e 
 
 O Docker Compose inicia PostgreSQL, Redis, Django, Vite, Celery Worker e Celery Beat. Dentro dos containers, Django acessa o banco pelo serviço `db` e o broker pelo serviço `redis`; essas configurações são aplicadas pelo Compose sem alterar o seu `.env` local.
 
+## Testes automatizados
+
+Instale as dependências de desenvolvimento do backend:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+Execute os testes e a cobertura do backend:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m pytest --cov --cov-report=term-missing --cov-report=html
+```
+
+No frontend, instale as dependências e execute a suíte:
+
+```powershell
+cd frontend
+npm install
+npm test
+npm run test:coverage
+```
+
+Os testes usam SQLite em memória, backend de e-mail local e mocks para integrações; PostgreSQL, Redis e SMTP não precisam estar ativos.
+
 - Frontend: http://localhost:5173
 - Backend: http://localhost:8000
 - Swagger: http://localhost:8000/api/docs/

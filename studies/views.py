@@ -1,6 +1,6 @@
 from datetime import date
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import viewsets
+from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -13,7 +13,7 @@ from .services import calendar_summary, study_statistics
 
 class StudyViewSet(viewsets.ModelViewSet):
     serializer_class = StudySerializer
-    permission_classes = [IsStudyOwner]
+    permission_classes = [permissions.IsAuthenticated, IsStudyOwner]
     filter_backends = [DjangoFilterBackend]
     filterset_class = StudyFilter
 
