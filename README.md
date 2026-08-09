@@ -66,7 +66,7 @@ npm install
 npm run dev
 ```
 
-Por padrão, `VITE_API_URL` aponta para `http://127.0.0.1:8000/api`. Os origins locais `3000` e `5173` já são aceitos pelo CORS do back-end.
+Por padrão, `VITE_API_URL` aponta para `http://localhost:8000/api`. O back-end aceita, em desenvolvimento, as origens locais nas portas `5173` e `5174`, tanto com `localhost` quanto com `127.0.0.1`.
 
 ## Docker
 

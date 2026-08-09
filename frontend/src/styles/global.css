@@ -225,7 +225,8 @@ a {
 }
 
 .filter-fields input,
-.settings-fields input {
+.settings-fields input,
+.settings-fields select {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -237,7 +238,8 @@ a {
 }
 
 .filter-fields input:focus,
-.settings-fields input:focus {
+.settings-fields input:focus,
+.settings-fields select:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px #172a6614;
 }
@@ -351,7 +353,22 @@ a {
 .toggle-row input { width: 20px; height: 20px; accent-color: var(--color-primary); }
 .settings-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 18px; }
 .profile-fields { grid-template-columns: 1fr; }
-.settings-fields input:disabled { background: #f5f4f7; color: var(--color-muted); }
+.timezone-field { grid-column: 1 / -1; display: grid; gap: 10px; }
+.field-label { color: var(--color-text); font-size: 13px; font-weight: 650; }
+.timezone-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.timezone-option { display: flex !important; grid-template-columns: none !important; align-items: center; gap: 12px !important; min-height: 86px; padding: 14px; border: 1px solid var(--color-border); border-radius: 13px; background: #fff; cursor: pointer; transition: 0.2s ease; }
+.timezone-option:hover { border-color: #bfc9e6; background: #f8f9fd; transform: translateY(-1px); }
+.timezone-option.active { border-color: var(--color-primary); background: #eef1fa; box-shadow: 0 0 0 3px #172a660d; }
+.timezone-option input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.timezone-option-copy { display: grid; gap: 5px; min-width: 0; }
+.timezone-option-copy strong { color: var(--color-primary); font-size: 15px; }
+.timezone-option-copy small { color: var(--color-muted); font-size: 12px; font-weight: 500; line-height: 1.4; }
+.timezone-check { flex: 0 0 24px; width: 24px; height: 24px; margin-left: auto; display: grid; place-items: center; border: 1px solid #d5d8e1; border-radius: 50%; color: transparent; background: #fff; }
+.timezone-option.active .timezone-check { color: #fff; border-color: var(--color-primary); background: var(--color-primary); }
+.timezone-hint { color: var(--color-primary); font-size: 12px; font-weight: 650; }
+.timezone-hint code { padding: 3px 6px; border-radius: 6px; background: #eef1fa; font-size: 11px; }
+.settings-fields input:disabled,
+.settings-fields select:disabled { background: #f5f4f7; color: var(--color-muted); }
 .settings-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
 .success-message { color: var(--color-success); margin: 16px 0 0; }
 .reminder-recipient { color: var(--color-muted); font-size: 14px; line-height: 1.5; margin: 16px 0; }
@@ -692,6 +709,7 @@ button:hover,
   .study-record-content { flex-basis: calc(100% - 52px); }
   .study-actions { width: 100%; padding-left: 52px; }
   .settings-actions button { width: 100%; }
+  .timezone-options { grid-template-columns: 1fr; }
 
   .dashboard-hero h1 {
     font-size: 32px;

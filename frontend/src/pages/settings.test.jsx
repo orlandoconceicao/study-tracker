@@ -10,14 +10,15 @@ vi.mock("../services/api", () => ({ default: { get: vi.fn(), patch: vi.fn() } })
 
 describe("Settings", () => {
   it("loads and saves reminder preferences", async () => {
-    api.get.mockResolvedValueOnce({ data: { enabled: false, reminder_time: null, timezone: "UTC" } });
+    api.get.mockResolvedValueOnce({ data: { enabled: false, reminder_time: null, timezone: "America/Manaus" } });
     api.patch.mockResolvedValueOnce({});
     renderWithProviders(<Settings />, { auth: defaultAuth });
-    expect(await screen.findByDisplayValue("UTC")).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: /UTC.4/i })).toBeChecked();
+    await userEvent.click(screen.getByRole("radio", { name: /UTC.3/i }));
     await userEvent.click(screen.getByRole("checkbox"));
     await userEvent.type(screen.getByLabelText(/^Hor.rio$/i), "20:00");
     await userEvent.click(screen.getByRole("button", { name: "Salvar lembrete" }));
-    await waitFor(() => expect(api.patch).toHaveBeenCalledWith("/notifications/settings/", { enabled: true, reminder_time: "20:00", timezone: "UTC" }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith("/notifications/settings/", { enabled: true, reminder_time: "20:00", timezone: "America/Sao_Paulo" }));
     expect(screen.getByText(/prefer.ncias de lembrete atualizadas/i)).toBeInTheDocument();
   });
 

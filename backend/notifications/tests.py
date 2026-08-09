@@ -19,6 +19,13 @@ class NotificationSettingsTests(APITestCase):
         response = self.client.patch("/api/notifications/settings/", {"enabled": True, "reminder_time": "20:00", "timezone": "America/Campo_Grande"})
         self.assertEqual(response.status_code, 200)
 
+    def test_rejects_invalid_timezone(self):
+        user = get_user_model().objects.create_user("ana", "ana@example.com", "password123")
+        self.client.force_authenticate(user)
+        response = self.client.patch("/api/notifications/settings/", {"timezone": "Invalid/Zone"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("timezone", response.data)
+
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend", DEFAULT_FROM_EMAIL="noreply@example.com")
     def test_manual_reminder_is_sent_to_current_user_email(self):
         user = get_user_model().objects.create_user("ana", "ana@example.com", "password123")

@@ -8,6 +8,51 @@ const initialReminder = {
   timezone: "America/Cuiaba",
 };
 
+const timezoneGroups = [
+  {
+    label: "UTC−2",
+    description: "Fernando de Noronha",
+    timezone: "America/Noronha",
+    options: [["America/Noronha", "Fernando de Noronha (PE)"]],
+  },
+  {
+    label: "UTC−3 — Horário de Brasília",
+    description: "Brasília, Sul, Sudeste, Nordeste, Pará e Tocantins",
+    timezone: "America/Sao_Paulo",
+    options: [
+      ["America/Sao_Paulo", "Brasília, Sul e Sudeste"],
+      ["America/Araguaina", "Araguaína (TO)"],
+      ["America/Bahia", "Salvador (BA)"],
+      ["America/Belem", "Belém (PA)"],
+      ["America/Fortaleza", "Fortaleza (CE)"],
+      ["America/Maceio", "Maceió (AL)"],
+      ["America/Recife", "Recife (PE)"],
+      ["America/Santarem", "Santarém (PA)"],
+    ],
+  },
+  {
+    label: "UTC−4 — Horário da Amazônia",
+    description: "Mato Grosso, Mato Grosso do Sul, Amazonas, Rondônia e Roraima",
+    timezone: "America/Cuiaba",
+    options: [
+      ["America/Boa_Vista", "Boa Vista (RR)"],
+      ["America/Campo_Grande", "Campo Grande (MS)"],
+      ["America/Cuiaba", "Cuiabá (MT)"],
+      ["America/Manaus", "Manaus (AM)"],
+      ["America/Porto_Velho", "Porto Velho (RO)"],
+    ],
+  },
+  {
+    label: "UTC−5 — Horário do Acre",
+    description: "Acre e oeste do Amazonas",
+    timezone: "America/Rio_Branco",
+    options: [
+      ["America/Eirunepe", "Eirunepé (AM)"],
+      ["America/Rio_Branco", "Rio Branco (AC)"],
+    ],
+  },
+];
+
 const errorMessage = (error, fallback) => {
   const data = error.response?.data;
   if (typeof data?.detail === "string") return data.detail;
@@ -24,6 +69,10 @@ export default function Settings() {
   const [savingReminder, setSavingReminder] = useState(false);
   const [profileStatus, setProfileStatus] = useState({ text: "", type: "" });
   const [reminderStatus, setReminderStatus] = useState({ text: "", type: "" });
+  const selectedTimezoneGroup =
+    timezoneGroups.find((group) =>
+      group.options.some(([value]) => value === reminder.timezone),
+    ) || timezoneGroups[2];
 
   useEffect(() => {
     if (user)
@@ -189,16 +238,46 @@ export default function Settings() {
                     }
                   />
                 </label>
-                <label>
-                  Fuso horário
-                  <input
-                    required
-                    value={reminder.timezone}
-                    onChange={(event) =>
-                      setReminder({ ...reminder, timezone: event.target.value })
-                    }
-                  />
-                </label>
+                <div className="timezone-field">
+                  <span className="field-label">Fuso horário</span>
+                  <div
+                    className="timezone-options"
+                    role="radiogroup"
+                    aria-label="Fusos horários do Brasil"
+                  >
+                    {timezoneGroups.map((group) => (
+                      <label
+                        key={group.label}
+                        className={
+                          selectedTimezoneGroup.label === group.label
+                            ? "timezone-option active"
+                            : "timezone-option"
+                        }
+                      >
+                        <input
+                          type="radio"
+                          name="timezone"
+                          value={group.timezone}
+                          checked={selectedTimezoneGroup.label === group.label}
+                          onChange={() =>
+                            setReminder({
+                              ...reminder,
+                              timezone: group.timezone,
+                            })
+                          }
+                        />
+                        <span className="timezone-option-copy">
+                          <strong>{group.label.split(" — ")[0]}</strong>
+                          <small>{group.description}</small>
+                        </span>
+                        <span className="timezone-check" aria-hidden="true">✓</span>
+                      </label>
+                    ))}
+                  </div>
+                  <small className="timezone-hint">
+                    Zona utilizada: <code>{selectedTimezoneGroup.timezone}</code>
+                  </small>
+                </div>
               </div>
               {reminderStatus.text && (
                 <p
