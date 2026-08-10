@@ -1,15 +1,3 @@
-:root {
-  --color-primary: #1f367d;
-  --color-primary-dark: #10255f;
-  --color-background: #f7f7f9;
-  --color-surface: #ffffff;
-  --color-text: #171923;
-  --color-text-secondary: #687083;
-  --color-border: #e1e3e8;
-  --color-error: #b42318;
-  --color-success: #027a48;
-}
-
 .auth-layout {
   min-height: 100vh;
   display: grid;
@@ -20,7 +8,7 @@
 .auth-brand {
   min-width: 0;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   padding: clamp(44px, 8vw, 110px);
   display: flex;
   flex-direction: column;
@@ -80,7 +68,7 @@
 }
 
 .visual-calendar i.done {
-  background: #fff;
+  background: var(--color-on-primary);
 }
 
 .visual-progress span {
@@ -117,7 +105,7 @@
 }
 
 .auth-card > div > p {
-  color: var(--color-text-secondary);
+  color: var(--color-muted);
   margin: 0 0 30px;
   line-height: 1.5;
 }
@@ -158,16 +146,16 @@
 }
 
 .auth-input::placeholder {
-  color: #9a9daa;
+  color: var(--color-muted);
 }
 
 .auth-input:focus {
-  border-color: #6d83c6;
-  box-shadow: 0 0 0 4px #6d83c622;
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-focus) 18%, transparent);
 }
 
 .auth-input:disabled {
-  background: #f5f6f8;
+  background: var(--color-surface-subtle);
   cursor: not-allowed;
 }
 
@@ -187,7 +175,7 @@
 }
 
 .auth-password-toggle:hover {
-  background: #eef1fa;
+  background: var(--color-primary-soft);
 }
 
 .auth-error {
@@ -202,7 +190,7 @@
   height: 52px;
   margin-top: 8px;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   border: 0;
   border-radius: 10px;
   font: inherit;
@@ -231,7 +219,7 @@
 
 .auth-card footer {
   text-align: center;
-  color: var(--color-text-secondary);
+  color: var(--color-muted);
   margin-top: 27px;
   font-size: 14px;
   line-height: 1.5;

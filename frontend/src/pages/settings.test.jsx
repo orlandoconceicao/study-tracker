@@ -1,50 +1,93 @@
 import React from "react";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import Settings from "./settings";
 import api from "../services/api";
+import { educationApi } from "../services/education";
 import { defaultAuth, renderWithProviders } from "../test/render";
 
-vi.mock("../services/api", () => ({ default: { get: vi.fn(), patch: vi.fn() } }));
+vi.mock("../services/api", () => ({ default: { get: vi.fn(), patch: vi.fn(), post: vi.fn(), delete: vi.fn() } }));
+vi.mock("../services/education", () => ({
+  collection: (response) => response.data?.results || response.data || [],
+  educationApi: { getChildren: vi.fn(), getLevels: vi.fn(), getGrades: vi.fn(), createChild: vi.fn(), updateChild: vi.fn(), deleteChild: vi.fn() },
+}));
+
+const loadSettings = () => {
+  api.get.mockResolvedValueOnce({ data: { enabled: false, reminder_time: null, timezone: "America/Manaus" } });
+  api.get.mockResolvedValueOnce({ data: { theme: "system", language: "pt-BR", daily_study_goal_minutes: 60 } });
+};
 
 describe("Settings", () => {
-  it("loads and saves reminder preferences", async () => {
-    api.get.mockResolvedValueOnce({ data: { enabled: false, reminder_time: null, timezone: "America/Manaus" } });
-    api.patch.mockResolvedValueOnce({});
+  beforeEach(() => {
+    vi.clearAllMocks();
+    educationApi.getChildren.mockResolvedValue({ data: [] });
+    educationApi.getLevels.mockResolvedValue({ data: [] });
+    educationApi.getGrades.mockResolvedValue({ data: [] });
+  });
+
+  it("carrega e salva lembretes", async () => {
+    loadSettings(); api.patch.mockResolvedValueOnce({});
     renderWithProviders(<Settings />, { auth: defaultAuth });
-    expect(await screen.findByRole("radio", { name: /UTC.4/i })).toBeChecked();
-    await userEvent.click(screen.getByRole("radio", { name: /UTC.3/i }));
+    expect(await screen.findByLabelText(/Fuso hor.rio/i)).toHaveValue("America/Manaus");
+    await userEvent.selectOptions(screen.getByLabelText(/Fuso hor.rio/i), "America/Sao_Paulo");
     await userEvent.click(screen.getByRole("checkbox"));
     await userEvent.type(screen.getByLabelText(/^Hor.rio$/i), "20:00");
     await userEvent.click(screen.getByRole("button", { name: "Salvar lembrete" }));
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith("/notifications/settings/", { enabled: true, reminder_time: "20:00", timezone: "America/Sao_Paulo" }));
-    expect(screen.getByText(/prefer.ncias de lembrete atualizadas/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lembrete atualizado com sucesso/i)).toBeInTheDocument();
   });
 
-  it("updates the profile through auth context", async () => {
-    api.get.mockResolvedValueOnce({ data: {} });
-    const updateProfile = vi.fn().mockResolvedValue({});
+  it("edita o perfil e atualiza o AuthContext", async () => {
+    loadSettings(); const updateProfile = vi.fn().mockResolvedValue({});
     renderWithProviders(<Settings />, { auth: { ...defaultAuth, updateProfile } });
-    const username = screen.getByLabelText(/Nome de usu.rio/i);
-    await userEvent.clear(username);
-    await userEvent.type(username, "ana_updated");
+    const username = await screen.findByLabelText(/Nome de usu.rio/i);
+    await userEvent.clear(username); await userEvent.type(username, "ana_updated");
     await userEvent.click(screen.getByRole("button", { name: "Salvar perfil" }));
-    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ username: "ana_updated", email: "ana@example.com" }));
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ first_name: "", last_name: "", username: "ana_updated", email: "ana@example.com" }));
     expect(screen.getByText(/Perfil atualizado com sucesso/i)).toBeInTheDocument();
   });
 
-  it("shows backend validation errors", async () => {
-    api.get.mockResolvedValueOnce({ data: {} });
-    const updateProfile = vi.fn().mockRejectedValue({ response: { data: { email: ["Este e-mail já está em uso."] } } });
-    renderWithProviders(<Settings />, { auth: { ...defaultAuth, updateProfile } });
-    await userEvent.click(screen.getByRole("button", { name: "Salvar perfil" }));
-    expect(await screen.findByText("Este e-mail já está em uso.")).toBeInTheDocument();
+  it("altera senha e salva preferências", async () => {
+    loadSettings(); api.post.mockResolvedValueOnce({});
+    const updatePreferences = vi.fn().mockResolvedValue({ theme: "dark", language: "pt-BR", daily_study_goal_minutes: 60 });
+    renderWithProviders(<Settings />, { auth: { ...defaultAuth, updatePreferences } });
+    await screen.findByLabelText(/Meta di.ria/i);
+    await userEvent.type(screen.getByLabelText("Senha atual"), "password123");
+    await userEvent.type(screen.getByLabelText("Nova senha"), "nova-senha-123");
+    await userEvent.type(screen.getByLabelText("Confirmar nova senha"), "nova-senha-123");
+    await userEvent.click(screen.getByRole("button", { name: "Alterar senha" }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith("/auth/change-password/", { current_password: "password123", new_password: "nova-senha-123", confirm_password: "nova-senha-123" }));
+    await userEvent.selectOptions(screen.getByLabelText("Tema"), "dark");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar preferências" }));
+    await waitFor(() => expect(updatePreferences).toHaveBeenCalledWith({ theme: "dark", language: "pt-BR", daily_study_goal_minutes: 60 }));
   });
 
-  it("reports reminder loading failure", async () => {
-    api.get.mockRejectedValueOnce(new Error("network"));
-    renderWithProviders(<Settings />);
-    expect(await screen.findByText(/carregar suas prefer.ncias/i)).toBeInTheDocument();
+  it("exibe erros e permite logout", async () => {
+    loadSettings(); const updateProfile = vi.fn().mockRejectedValue({ response: { data: { email: ["Este e-mail já está em uso."] } } }); const logout = vi.fn();
+    renderWithProviders(<Settings />, { auth: { ...defaultAuth, updateProfile, logout } });
+    const email = await screen.findByLabelText("E-mail", { selector: "input" });
+    await userEvent.clear(email); await userEvent.type(email, "outra@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar perfil" }));
+    expect(await screen.findByText("Este e-mail já está em uso.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Sair da conta" }));
+    expect(logout).toHaveBeenCalled();
+  });
+
+  it("adiciona filho usando níveis e séries do backend", async () => {
+    loadSettings();
+    educationApi.getLevels.mockResolvedValue({ data: [{ id: 1, name: "Ensino Fundamental II" }] });
+    educationApi.getGrades.mockResolvedValue({ data: [{ id: 7, education_level: 1, name: "7º ano" }, { id: 8, education_level: 2, name: "1º ano" }] });
+    educationApi.createChild.mockResolvedValue({ data: { id: 10, name: "João", education_level: 1, education_level_name: "Ensino Fundamental II", grade: 7, grade_name: "7º ano" } });
+    renderWithProviders(<Settings />, { auth: defaultAuth });
+    await userEvent.click(await screen.findByRole("button", { name: /Adicionar filho/i }));
+    await userEvent.type(screen.getByLabelText("Nome do filho"), "João");
+    await userEvent.selectOptions(screen.getByLabelText("Nível de escolaridade"), "1");
+    expect(screen.getByRole("option", { name: "7º ano" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "1º ano" })).not.toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Série/Ano"), "7");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar filho" }));
+    await waitFor(() => expect(educationApi.createChild).toHaveBeenCalledWith({ name: "João", birth_date: null, education_level: 1, grade: 7 }));
+    expect(await screen.findByText("Filho adicionado com sucesso.")).toBeInTheDocument();
   });
 });

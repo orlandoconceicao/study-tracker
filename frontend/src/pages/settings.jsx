@@ -1,308 +1,141 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
+import { collection, educationApi } from "../services/education";
 
-const initialReminder = {
-  enabled: false,
-  reminder_time: "",
-  timezone: "America/Cuiaba",
-};
-
-const timezoneGroups = [
-  {
-    label: "UTC−2",
-    description: "Fernando de Noronha",
-    timezone: "America/Noronha",
-    options: [["America/Noronha", "Fernando de Noronha (PE)"]],
-  },
-  {
-    label: "UTC−3 — Horário de Brasília",
-    description: "Brasília, Sul, Sudeste, Nordeste, Pará e Tocantins",
-    timezone: "America/Sao_Paulo",
-    options: [
-      ["America/Sao_Paulo", "Brasília, Sul e Sudeste"],
-      ["America/Araguaina", "Araguaína (TO)"],
-      ["America/Bahia", "Salvador (BA)"],
-      ["America/Belem", "Belém (PA)"],
-      ["America/Fortaleza", "Fortaleza (CE)"],
-      ["America/Maceio", "Maceió (AL)"],
-      ["America/Recife", "Recife (PE)"],
-      ["America/Santarem", "Santarém (PA)"],
-    ],
-  },
-  {
-    label: "UTC−4 — Horário da Amazônia",
-    description: "Mato Grosso, Mato Grosso do Sul, Amazonas, Rondônia e Roraima",
-    timezone: "America/Cuiaba",
-    options: [
-      ["America/Boa_Vista", "Boa Vista (RR)"],
-      ["America/Campo_Grande", "Campo Grande (MS)"],
-      ["America/Cuiaba", "Cuiabá (MT)"],
-      ["America/Manaus", "Manaus (AM)"],
-      ["America/Porto_Velho", "Porto Velho (RO)"],
-    ],
-  },
-  {
-    label: "UTC−5 — Horário do Acre",
-    description: "Acre e oeste do Amazonas",
-    timezone: "America/Rio_Branco",
-    options: [
-      ["America/Eirunepe", "Eirunepé (AM)"],
-      ["America/Rio_Branco", "Rio Branco (AC)"],
-    ],
-  },
+const initialReminder = { enabled: false, reminder_time: "", timezone: "America/Cuiaba" };
+const initialPreferences = { theme: "system", language: "pt-BR", daily_study_goal_minutes: 60 };
+const timezones = [
+  ["America/Noronha", "Fernando de Noronha (UTC−2)"], ["America/Sao_Paulo", "Brasília (UTC−3)"],
+  ["America/Cuiaba", "Cuiabá (UTC−4)"], ["America/Manaus", "Manaus (UTC−4)"],
+  ["America/Rio_Branco", "Rio Branco (UTC−5)"],
 ];
-
-const errorMessage = (error, fallback) => {
+const emptyStatus = { text: "", type: "" };
+const emptyChild = { name: "", birth_date: "", education_level: "", grade: "" };
+const message = (error, fallback) => {
   const data = error.response?.data;
   if (typeof data?.detail === "string") return data.detail;
-  const firstError = Object.values(data || {}).flat()[0];
-  return typeof firstError === "string" ? firstError : fallback;
+  const value = Object.values(data || {})[0];
+  return (Array.isArray(value) ? value[0] : value) || fallback;
 };
+const dateTime = (value) => value ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "long", timeStyle: "short" }).format(new Date(value)) : "Não disponível";
+
+function Status({ value }) {
+  return value.text ? <p className={value.type === "error" ? "auth-error" : "success-message"} role="status">{value.text}</p> : null;
+}
 
 export default function Settings() {
-  const { user, updateProfile } = useAuth();
-  const [profile, setProfile] = useState({ username: "", email: "" });
+  const { user, preferences: authPreferences, updateProfile, updatePreferences, logout } = useAuth();
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState({ first_name: "", last_name: "", username: "", email: "" });
+  const [savedProfile, setSavedProfile] = useState(profile);
   const [reminder, setReminder] = useState(initialReminder);
+  const [savedReminder, setSavedReminder] = useState(initialReminder);
+  const [preferences, setPreferences] = useState(initialPreferences);
+  const [savedPreferences, setSavedPreferences] = useState(initialPreferences);
+  const [passwords, setPasswords] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [deleteData, setDeleteData] = useState({ current_password: "", confirmation: "" });
+  const [showDelete, setShowDelete] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [savingReminder, setSavingReminder] = useState(false);
-  const [profileStatus, setProfileStatus] = useState({ text: "", type: "" });
-  const [reminderStatus, setReminderStatus] = useState({ text: "", type: "" });
-  const selectedTimezoneGroup =
-    timezoneGroups.find((group) =>
-      group.options.some(([value]) => value === reminder.timezone),
-    ) || timezoneGroups[2];
+  const [saving, setSaving] = useState("");
+  const [statuses, setStatuses] = useState({});
+  const [children, setChildren] = useState([]);
+  const [levels, setLevels] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [childForm, setChildForm] = useState(emptyChild);
+  const [editingChild, setEditingChild] = useState(null);
+  const [showChildForm, setShowChildForm] = useState(false);
+  const [deletingChild, setDeletingChild] = useState(null);
+  const [childrenLoading, setChildrenLoading] = useState(true);
+  const setStatus = (key, text, type = "success") => setStatuses((old) => ({ ...old, [key]: { text, type } }));
 
   useEffect(() => {
-    if (user)
-      setProfile({ username: user.username || "", email: user.email || "" });
+    if (user) {
+      const value = { first_name: user.first_name || "", last_name: user.last_name || "", username: user.username || "", email: user.email || "" };
+      setProfile(value); setSavedProfile(value);
+    }
   }, [user]);
-
   useEffect(() => {
-    api
-      .get("/notifications/settings/")
-      .then(({ data }) =>
-        setReminder({
-          ...initialReminder,
-          ...data,
-          reminder_time: data.reminder_time || "",
-        }),
-      )
-      .catch(() =>
-        setReminderStatus({
-          text: "Não foi possível carregar suas preferências de lembrete.",
-          type: "error",
-        }),
-      )
+    api.get("/notifications/settings/")
+      .then((notificationResponse) => {
+        const notification = { ...initialReminder, ...notificationResponse.data, reminder_time: notificationResponse.data.reminder_time || "" };
+        setReminder(notification); setSavedReminder(notification);
+      })
+      .catch((error) => setStatus("load", message(error, "Não foi possível carregar suas preferências."), "error"))
       .finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+    const value = { ...initialPreferences, ...authPreferences };
+    setPreferences(value); setSavedPreferences(value);
+  }, [authPreferences]);
+  useEffect(() => {
+    Promise.all([educationApi.getChildren(), educationApi.getLevels(), educationApi.getGrades()])
+      .then(([childResponse, levelResponse, gradeResponse]) => {
+        setChildren(collection(childResponse)); setLevels(collection(levelResponse)); setGrades(collection(gradeResponse));
+      })
+      .catch((error) => setStatus("children", message(error, "Não foi possível carregar os filhos."), "error"))
+      .finally(() => setChildrenLoading(false));
+  }, []);
 
-  const saveProfile = async (event) => {
-    event.preventDefault();
-    setSavingProfile(true);
-    setProfileStatus({ text: "", type: "" });
-    try {
-      await updateProfile(profile);
-      setProfileStatus({
-        text: "Perfil atualizado com sucesso.",
-        type: "success",
-      });
-    } catch (error) {
-      setProfileStatus({
-        text: errorMessage(error, "Não foi possível atualizar o perfil."),
-        type: "error",
-      });
-    } finally {
-      setSavingProfile(false);
-    }
+  const changed = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
+  const profileValid = profile.username.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email);
+  const passwordValid = passwords.current_password && passwords.new_password.length >= 8 && passwords.new_password === passwords.confirm_password;
+  const reminderValid = !reminder.enabled || reminder.reminder_time;
+  const availableGrades = useMemo(() => grades.filter((grade) => String(grade.education_level) === String(childForm.education_level)), [grades, childForm.education_level]);
+  const accountLabel = useMemo(() => user?.username ? `Usuário autenticado: ${user.username}` : "Usuário autenticado", [user]);
+
+  const submit = async (key, action, success) => {
+    setSaving(key); setStatus(key, "", "");
+    try { await action(); setStatus(key, success); } catch (error) { setStatus(key, message(error, "Não foi possível salvar as alterações."), "error"); }
+    finally { setSaving(""); }
   };
-
-  const saveReminder = async (event) => {
-    event.preventDefault();
-    setSavingReminder(true);
-    setReminderStatus({ text: "", type: "" });
-    try {
-      await api.patch("/notifications/settings/", reminder);
-      setReminderStatus({
-        text: "Preferências de lembrete atualizadas.",
-        type: "success",
-      });
-    } catch (error) {
-      setReminderStatus({
-        text: errorMessage(
-          error,
-          "Não foi possível salvar as preferências de lembrete.",
-        ),
-        type: "error",
-      });
-    } finally {
-      setSavingReminder(false);
-    }
+  const saveProfile = (event) => { event.preventDefault(); submit("profile", async () => { const result = await updateProfile(profile); setSavedProfile({ ...profile }); return result; }, "Perfil atualizado com sucesso."); };
+  const savePassword = (event) => { event.preventDefault(); submit("password", async () => { await api.post("/auth/change-password/", passwords); setPasswords({ current_password: "", new_password: "", confirm_password: "" }); }, "Senha alterada com sucesso."); };
+  const saveReminder = (event) => { event.preventDefault(); submit("reminder", async () => { await api.patch("/notifications/settings/", { ...reminder, reminder_time: reminder.reminder_time || null }); setSavedReminder({ ...reminder }); }, "Lembrete atualizado com sucesso."); };
+  const savePreferences = (event) => { event.preventDefault(); submit("preferences", async () => { const saved = await updatePreferences(preferences); setSavedPreferences({ ...saved }); }, "Preferências atualizadas com sucesso."); };
+  const signOut = () => { logout(); navigate("/login", { replace: true }); };
+  const deleteAccount = (event) => { event.preventDefault(); submit("delete", async () => { await api.delete("/auth/account/", { data: deleteData }); logout(); navigate("/login", { replace: true }); }, "Conta desativada com sucesso."); };
+  const openChild = (child = null) => {
+    setEditingChild(child);
+    setChildForm(child ? { name: child.name, birth_date: child.birth_date || "", education_level: String(child.education_level || ""), grade: String(child.grade || "") } : emptyChild);
+    setShowChildForm(true); setDeletingChild(null); setStatus("children", "", "");
   };
+  const saveChild = (event) => { event.preventDefault(); submit("child", async () => {
+    const payload = { ...childForm, education_level: Number(childForm.education_level), grade: Number(childForm.grade), birth_date: childForm.birth_date || null };
+    const response = editingChild ? await educationApi.updateChild(editingChild.id, payload) : await educationApi.createChild(payload);
+    setChildren((current) => editingChild ? current.map((item) => item.id === response.data.id ? response.data : item) : [...current, response.data].sort((a, b) => a.name.localeCompare(b.name)));
+    setShowChildForm(false); setEditingChild(null); setChildForm(emptyChild);
+  }, editingChild ? "Escolaridade atualizada com sucesso." : "Filho adicionado com sucesso."); };
+  const removeChild = () => submit("child-delete", async () => {
+    await educationApi.deleteChild(deletingChild.id);
+    setChildren((current) => current.filter((item) => item.id !== deletingChild.id));
+    if (String(localStorage.getItem("study_active_child")) === String(deletingChild.id)) localStorage.removeItem("study_active_child");
+    setDeletingChild(null);
+  }, "Filho excluído com sucesso.");
 
-  return (
-    <section className="page-content settings-page">
-      <header className="page-hero">
-        <div>
-          <span className="eyebrow">PREFERÊNCIAS</span>
-          <h1>Configurações</h1>
-          <p>Gerencie seu perfil e seus lembretes de estudo.</p>
-        </div>
-      </header>
-      <div className="settings-grid">
-        <form className="card settings-section" onSubmit={saveProfile}>
-          <span className="eyebrow">PERFIL</span>
-          <h2>Perfil</h2>
-          <p className="section-description">
-            Atualize suas informações pessoais.
-          </p>
-          <div className="settings-fields profile-fields">
-            <label>
-              Nome de usuário
-              <input
-                required
-                value={profile.username}
-                onChange={(event) =>
-                  setProfile({ ...profile, username: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              E-mail
-              <input
-                type="email"
-                required
-                value={profile.email}
-                onChange={(event) =>
-                  setProfile({ ...profile, email: event.target.value })
-                }
-              />
-            </label>
-          </div>
-          {profileStatus.text && (
-            <p
-              className={
-                profileStatus.type === "error"
-                  ? "auth-error"
-                  : "success-message"
-              }
-            >
-              {profileStatus.text}
-            </p>
-          )}
-          <div className="settings-actions">
-            <button type="submit" disabled={savingProfile}>
-              {savingProfile ? "Salvando..." : "Salvar perfil"}
-            </button>
-          </div>
-        </form>
-        <form className="card settings-section" onSubmit={saveReminder}>
-          <span className="eyebrow">NOTIFICAÇÕES</span>
-          <h2>Lembrete diário</h2>
-          <p className="section-description">
-            Escolha quando deseja receber seu lembrete de estudo por e-mail.
-          </p>
-          {loading ? (
-            <p className="muted">Carregando preferências...</p>
-          ) : (
-            <>
-              <p className="reminder-recipient">
-                Os lembretes serão enviados para:{" "}
-                <strong>{user?.email || "e-mail não informado"}</strong>
-              </p>
-              <label className="toggle-row">
-                <span>
-                  <strong>Ativar lembrete</strong>
-                  <small>Receba um lembrete diário no horário escolhido.</small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={reminder.enabled}
-                  onChange={(event) =>
-                    setReminder({ ...reminder, enabled: event.target.checked })
-                  }
-                />
-              </label>
-              <div className="settings-fields">
-                <label>
-                  Horário
-                  <input
-                    type="time"
-                    value={reminder.reminder_time}
-                    onChange={(event) =>
-                      setReminder({
-                        ...reminder,
-                        reminder_time: event.target.value,
-                      })
-                    }
-                  />
-                </label>
-                <div className="timezone-field">
-                  <span className="field-label">Fuso horário</span>
-                  <div
-                    className="timezone-options"
-                    role="radiogroup"
-                    aria-label="Fusos horários do Brasil"
-                  >
-                    {timezoneGroups.map((group) => (
-                      <label
-                        key={group.label}
-                        className={
-                          selectedTimezoneGroup.label === group.label
-                            ? "timezone-option active"
-                            : "timezone-option"
-                        }
-                      >
-                        <input
-                          type="radio"
-                          name="timezone"
-                          value={group.timezone}
-                          checked={selectedTimezoneGroup.label === group.label}
-                          onChange={() =>
-                            setReminder({
-                              ...reminder,
-                              timezone: group.timezone,
-                            })
-                          }
-                        />
-                        <span className="timezone-option-copy">
-                          <strong>{group.label.split(" — ")[0]}</strong>
-                          <small>{group.description}</small>
-                        </span>
-                        <span className="timezone-check" aria-hidden="true">✓</span>
-                      </label>
-                    ))}
-                  </div>
-                  <small className="timezone-hint">
-                    Zona utilizada: <code>{selectedTimezoneGroup.timezone}</code>
-                  </small>
-                </div>
-              </div>
-              {reminderStatus.text && (
-                <p
-                  className={
-                    reminderStatus.type === "error"
-                      ? "auth-error"
-                      : "success-message"
-                  }
-                >
-                  {reminderStatus.text}
-                </p>
-              )}
-              <div className="settings-actions">
-                <button type="submit" disabled={savingReminder}>
-                  {savingReminder ? "Salvando..." : "Salvar lembrete"}
-                </button>
-              </div>
-            </>
-          )}
-        </form>
-        <aside className="settings-info">
-          <span aria-hidden="true">✦</span>
-          <p>Você receberá o lembrete no e-mail cadastrado no seu perfil.</p>
-        </aside>
-      </div>
-    </section>
-  );
+  return <section className="page-content settings-page">
+    <header className="page-hero"><div><span className="eyebrow">PREFERÊNCIAS</span><h1>Configurações</h1><p>Gerencie sua conta, perfil, segurança e preferências.</p></div></header>
+    <Status value={statuses.load || emptyStatus} />
+    <div className="settings-grid">
+      <form className="card settings-section" onSubmit={saveProfile}><span className="eyebrow">PERFIL</span><h2>Perfil</h2><p className="section-description">Atualize suas informações pessoais.</p>
+        <div className="settings-fields profile-fields"><label>Nome<input maxLength="150" value={profile.first_name} onChange={(e) => setProfile({ ...profile, first_name: e.target.value })} /></label><label>Sobrenome<input maxLength="150" value={profile.last_name} onChange={(e) => setProfile({ ...profile, last_name: e.target.value })} /></label><label>Nome de usuário<input required maxLength="150" value={profile.username} onChange={(e) => setProfile({ ...profile, username: e.target.value })} /></label><label>E-mail<input type="email" required maxLength="254" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></label></div>
+        <Status value={statuses.profile || emptyStatus} /><div className="settings-actions"><button disabled={saving === "profile" || !profileValid || !changed(profile, savedProfile)}>{saving === "profile" ? "Salvando..." : "Salvar perfil"}</button></div>
+      </form>
+      <form className="card settings-section" onSubmit={saveReminder}><span className="eyebrow">LEMBRETES</span><h2>Lembrete diário</h2><p className="section-description">Escolha quando receber seu lembrete de estudo.</p>
+        {loading ? <p className="muted">Carregando preferências...</p> : <><p className="reminder-recipient">Os lembretes serão enviados para: <strong>{profile.email || "e-mail não informado"}</strong></p><label className="toggle-row"><span><strong>Ativar lembrete</strong><small>Receba um e-mail diariamente.</small></span><input type="checkbox" checked={reminder.enabled} onChange={(e) => setReminder({ ...reminder, enabled: e.target.checked })} /></label><div className="settings-fields"><label>Horário<input aria-label="Horário" type="time" required={reminder.enabled} value={reminder.reminder_time} onChange={(e) => setReminder({ ...reminder, reminder_time: e.target.value })} /></label><label>Fuso horário<select value={reminder.timezone} onChange={(e) => setReminder({ ...reminder, timezone: e.target.value })}>{timezones.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><Status value={statuses.reminder || emptyStatus} /><div className="settings-actions"><button disabled={saving === "reminder" || !reminderValid || !changed(reminder, savedReminder)}>{saving === "reminder" ? "Salvando..." : "Salvar lembrete"}</button></div></>}
+      </form>
+      <form className="card settings-section" onSubmit={savePassword}><span className="eyebrow">SEGURANÇA</span><h2>Alterar senha</h2><p className="section-description">Use pelo menos 8 caracteres na nova senha.</p><div className="settings-fields profile-fields"><label>Senha atual<input type="password" autoComplete="current-password" required value={passwords.current_password} onChange={(e) => setPasswords({ ...passwords, current_password: e.target.value })} /></label><label>Nova senha<input type="password" autoComplete="new-password" minLength="8" required value={passwords.new_password} onChange={(e) => setPasswords({ ...passwords, new_password: e.target.value })} /></label><label>Confirmar nova senha<input type="password" autoComplete="new-password" required value={passwords.confirm_password} onChange={(e) => setPasswords({ ...passwords, confirm_password: e.target.value })} /></label></div><Status value={statuses.password || emptyStatus} /><div className="settings-actions"><button disabled={saving === "password" || !passwordValid}>{saving === "password" ? "Alterando..." : "Alterar senha"}</button></div></form>
+      <form className="card settings-section" onSubmit={savePreferences}><span className="eyebrow">INTERFACE</span><h2>Preferências</h2><p className="section-description">Personalize sua experiência e sua meta de estudo.</p><div className="settings-fields profile-fields"><label>Tema<select value={preferences.theme} onChange={(e) => setPreferences({ ...preferences, theme: e.target.value })}><option value="system">Usar configuração do sistema</option><option value="light">Claro</option><option value="dark">Escuro</option></select></label><label>Idioma<select value={preferences.language} onChange={(e) => setPreferences({ ...preferences, language: e.target.value })}><option value="pt-BR">Português (Brasil)</option></select></label><label>Meta diária de estudo (minutos)<input type="number" min="1" max="1440" required value={preferences.daily_study_goal_minutes} onChange={(e) => setPreferences({ ...preferences, daily_study_goal_minutes: Number(e.target.value) })} /></label></div><Status value={statuses.preferences || emptyStatus} /><div className="settings-actions"><button disabled={saving === "preferences" || !changed(preferences, savedPreferences)}>{saving === "preferences" ? "Salvando..." : "Salvar preferências"}</button></div></form>
+      <section className="card settings-section children-settings"><span className="eyebrow">FILHOS E ESCOLARIDADE</span><h2>Filhos e escolaridade</h2><p className="section-description">Gerencie a etapa escolar atual sem perder o histórico de estudos.</p>
+        <Status value={statuses["child-delete"]?.text ? statuses["child-delete"] : statuses.child?.text ? statuses.child : statuses.children || emptyStatus} />
+        {childrenLoading ? <p className="muted">Carregando filhos...</p> : <div className="settings-child-list">{children.map((child) => <article key={child.id}><div><strong>{child.name}</strong><span>{child.education_level_name || "Escolaridade não informada"}</span><span>{child.grade_name || "Série/ano não informado"}</span></div><button type="button" className="text-button" onClick={() => openChild(child)}>Editar</button><button type="button" className="text-button danger" onClick={() => { setDeletingChild(child); setShowChildForm(false); }}>Excluir</button></article>)}{!children.length && <p className="muted">Nenhum filho cadastrado.</p>}</div>}
+        {showChildForm && <form className="settings-child-form" onSubmit={saveChild}><h3>{editingChild ? `Editar ${editingChild.name}` : "Adicionar filho"}</h3><div className="settings-fields profile-fields"><label>Nome do filho<input required maxLength="150" value={childForm.name} onChange={(e) => setChildForm({ ...childForm, name: e.target.value })} /></label><label>Data de nascimento (opcional)<input type="date" value={childForm.birth_date} onChange={(e) => setChildForm({ ...childForm, birth_date: e.target.value })} /></label><label>Nível de escolaridade<select required value={childForm.education_level} onChange={(e) => setChildForm({ ...childForm, education_level: e.target.value, grade: "" })}><option value="">Selecionar</option>{levels.map((level) => <option key={level.id} value={level.id}>{level.name}</option>)}</select></label><label>Série/Ano<select required disabled={!childForm.education_level} value={childForm.grade} onChange={(e) => setChildForm({ ...childForm, grade: e.target.value })}><option value="">Selecionar</option>{availableGrades.map((grade) => <option key={grade.id} value={grade.id}>{grade.name}</option>)}</select></label></div><div className="settings-actions split-actions"><button type="button" className="secondary-button" onClick={() => setShowChildForm(false)}>Cancelar</button><button disabled={saving === "child"}>{saving === "child" ? "Salvando..." : "Salvar filho"}</button></div></form>}
+        {deletingChild && <div className="child-delete-confirm" role="alert"><p>Excluir <strong>{deletingChild.name}</strong>? Os dados vinculados a este filho também serão removidos.</p><div className="settings-actions split-actions"><button type="button" className="secondary-button" onClick={() => setDeletingChild(null)}>Cancelar</button><button type="button" className="danger-button" disabled={saving === "child-delete"} onClick={removeChild}>{saving === "child-delete" ? "Excluindo..." : "Confirmar exclusão"}</button></div></div>}
+        {!showChildForm && !deletingChild && <div className="settings-actions"><button type="button" onClick={() => openChild()}>+ Adicionar filho</button></div>}
+      </section>
+      <section className="card settings-section account-card"><span className="eyebrow">CONTA E SESSÃO</span><h2>Conta</h2><dl className="account-details"><div><dt>Usuário desde</dt><dd>{dateTime(user?.date_joined)}</dd></div><div><dt>Último acesso</dt><dd>{dateTime(user?.last_login)}</dd></div><div><dt>Sessão</dt><dd>{accountLabel}</dd></div><div><dt>E-mail</dt><dd>{profile.email || "Não informado"}</dd></div></dl><div className="settings-actions"><button type="button" className="secondary-button" onClick={signOut}>Sair da conta</button></div></section>
+      <section className="card settings-section danger-zone"><span className="eyebrow">ZONA DE PERIGO</span><h2>Excluir minha conta</h2><p className="section-description">Sua conta será desativada e você perderá o acesso imediatamente.</p>{!showDelete ? <div className="settings-actions"><button type="button" className="danger-button" onClick={() => setShowDelete(true)}>Excluir minha conta</button></div> : <form onSubmit={deleteAccount}><div className="danger-confirmation"><label>Senha atual<input type="password" required value={deleteData.current_password} onChange={(e) => setDeleteData({ ...deleteData, current_password: e.target.value })} /></label><label>Digite EXCLUIR MINHA CONTA<input required value={deleteData.confirmation} onChange={(e) => setDeleteData({ ...deleteData, confirmation: e.target.value })} /></label></div><Status value={statuses.delete || emptyStatus} /><div className="settings-actions split-actions"><button type="button" className="secondary-button" onClick={() => setShowDelete(false)}>Cancelar</button><button className="danger-button" disabled={saving === "delete" || !deleteData.current_password || deleteData.confirmation !== "EXCLUIR MINHA CONTA"}>{saving === "delete" ? "Excluindo..." : "Confirmar exclusão"}</button></div></form>}</section>
+    </div>
+  </section>;
 }

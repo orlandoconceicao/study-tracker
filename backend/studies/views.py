@@ -17,7 +17,10 @@ class StudyViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = StudyFilter
 
-    def get_queryset(self): return Study.objects.filter(user=self.request.user)
+    def get_queryset(self):
+        queryset = Study.objects.filter(user=self.request.user).select_related("child")
+        child_id = self.request.query_params.get("child")
+        return queryset.filter(child_id=child_id) if child_id else queryset
     def perform_create(self, serializer): serializer.save(user=self.request.user)
 
     @action(detail=False, methods=["get"])

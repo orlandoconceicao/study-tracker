@@ -13,9 +13,11 @@ describe("AuthProvider", () => {
   it("restores an authenticated session from storage", async () => {
     localStorage.setItem("study_access_token", "access");
     api.get.mockResolvedValueOnce({ data: { username: "ana" } });
+    api.get.mockResolvedValueOnce({ data: { theme: "dark" } });
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.user).toEqual({ username: "ana" });
+    expect(document.documentElement.dataset.theme).toBe("dark");
   });
 
   it("clears an invalid stored session", async () => {
@@ -30,6 +32,7 @@ describe("AuthProvider", () => {
   it("logs in, stores both tokens and loads the profile", async () => {
     api.post.mockResolvedValueOnce({ data: { access: "a", refresh: "r" } });
     api.get.mockResolvedValueOnce({ data: { username: "ana" } });
+    api.get.mockResolvedValueOnce({ data: { theme: "light" } });
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     await act(() => result.current.login({ username: "ana", password: "secret" }));

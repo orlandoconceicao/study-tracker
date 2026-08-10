@@ -26,6 +26,34 @@ Aplicação fullstack para acompanhar estudos diários. O back-end usa Django RE
 
 `users` contém o usuário customizado e autenticação. `studies` concentra registros, filtros e serviços de calendário/estatísticas. `notifications` armazena as preferências e tarefas de lembrete. As rotas e regras de negócio não foram alteradas pela reorganização.
 
+## Módulo educacional
+
+O app Django `education` organiza o currículo na hierarquia nível de ensino → série → matéria da série → unidade → conteúdo → aula/exercício. Textos de aula são armazenados como texto simples em `TextField`; a aplicação não persiste HTML renderizável.
+
+Usuários autenticados podem consultar o currículo, concluir aulas e responder exercícios. A resposta correta e a explicação não aparecem na consulta do exercício e são reveladas somente após uma tentativa. Usuários `staff` administram o currículo pelo Django Admin (ou pelas operações de escrita da API); usuários comuns recebem `403` nessas operações.
+
+O progresso de um conteúdo considera uma parte para cada aula concluída e duas para cada exercício: uma pela tentativa e outra pelo acerto. Ele é recalculado em `education/services.py` após concluir uma aula ou responder um exercício.
+
+### Professores, alunos e turmas
+
+Em `/classes`, cada usuário escolhe seu perfil educacional como aluno ou professor, sem alterar sua conta ou autenticação. Professores criam turmas vinculadas a uma série, compartilham o código de seis caracteres, publicam atividades referenciando conteúdos existentes e acompanham o desempenho dos alunos. Alunos entram com o código, acessam matérias e atividades e podem sair da turma. Dados de colegas e relatórios de desempenho são visíveis somente ao professor proprietário.
+
+### Avaliação diagnóstica
+
+Antes de estudar um conteúdo, o aluno pode iniciar um diagnóstico de até dez questões reutilizadas do banco de exercícios. As respostas corretas não são enviadas durante a avaliação. Ao final, regras determinísticas classificam o resultado como iniciante, intermediário ou avançado, agrupam pontos fortes e conteúdos para revisão pelas aulas associadas e recomendam uma aula para começar.
+
+### Banco de Questões e atividades
+
+O Banco de Questões em `/questions` reutiliza `Exercise` e permite filtrar pela hierarquia curricular, dificuldade e tipo. Professores podem selecionar questões e criar atividades para suas turmas. Alunos acessam as listas em `/activities`, respondem sem receber o gabarito antes da entrega e recebem ao final quantidade de questões, acertos, erros, percentual e tempo utilizado. O professor criador pode consultar os resultados dos alunos.
+
+### Revisão e Caderno de Erros
+
+As páginas `/review` e `/review/errors` transformam o histórico existente de `ExerciseAttempt` em uma fila de revisão e um caderno de questões erradas. A prioridade é calculada deterministicamente com quantidade de erros, percentual de acerto, tempo desde a última tentativa e progresso do conteúdo. Refazer uma questão sempre cria uma nova tentativa e preserva o histórico anterior.
+
+### Recomendações de estudo e ensino
+
+“O que estudar agora?” usa tentativas, progresso, diagnósticos, aulas concluídas e entregas de atividades para priorizar conteúdos sem IA externa. A recomendação principal aparece no Dashboard. Professores acessam `/teaching` para consultar “O que ensinar agora?” por turma e aluno e montar um roteiro determinístico com revisão, explicação, exemplo, exercício guiado, prática independente, correção e resumo. O roteiro utiliza apenas aulas e exercícios cadastrados e sinaliza etapas sem material.
+
 ## Endpoints
 
 | Método | Rota | Descrição |
@@ -39,6 +67,42 @@ Aplicação fullstack para acompanhar estudos diários. O back-end usa Django RE
 | GET | `/api/studies/calendar/?month=8&year=2026` | Dias e minutos do mês |
 | GET | `/api/studies/statistics/` | Totais e sequências |
 | GET, PATCH | `/api/notifications/settings/` | Lembrete do usuário |
+| GET | `/api/education/levels/` | Lista níveis de ensino |
+| GET | `/api/education/grades/` | Lista séries |
+| GET | `/api/education/subjects/` | Lista matérias ativas |
+| GET | `/api/education/grades/{id}/subjects/` | Matérias de uma série |
+| GET | `/api/education/subjects/{id}/units/?grade={id}` | Unidades da matéria, opcionalmente por série |
+| GET | `/api/education/topics/{id}/` | Detalha um conteúdo |
+| GET | `/api/education/topics/{id}/lessons/` | Aulas do conteúdo |
+| GET | `/api/education/topics/{id}/exercises/` | Exercícios sem gabarito |
+| GET | `/api/education/lessons/{id}/` | Detalha uma aula |
+| POST | `/api/education/lessons/{id}/complete/` | Marca a aula como concluída |
+| POST | `/api/education/exercises/{id}/answer/` | Registra resposta e retorna a correção |
+| GET | `/api/education/progress/` | Progresso do usuário autenticado |
+| GET, PATCH | `/api/education/profile/` | Consulta ou escolhe o perfil educacional |
+| GET, POST | `/api/education/classrooms/` | Lista turmas acessíveis ou cria uma turma |
+| GET, PATCH, DELETE | `/api/education/classrooms/{id}/` | Consulta ou administra uma turma própria |
+| POST | `/api/education/classrooms/join/` | Entra em uma turma usando o código |
+| POST | `/api/education/classrooms/{id}/join/` | Entra em uma turma pelo identificador |
+| POST | `/api/education/classrooms/{id}/leave/` | Sai de uma turma |
+| GET, POST | `/api/education/classrooms/{id}/activities/` | Lista ou publica atividades |
+| GET | `/api/education/classrooms/{id}/performance/` | Desempenho dos alunos para o professor |
+| POST | `/api/education/topics/{id}/diagnostic/start/` | Inicia um diagnóstico do conteúdo |
+| POST | `/api/education/diagnostics/{id}/answer/` | Responde uma questão do diagnóstico |
+| POST | `/api/education/diagnostics/{id}/finish/` | Finaliza e calcula o diagnóstico |
+| GET | `/api/education/diagnostics/{id}/result/` | Consulta o resultado do próprio diagnóstico |
+| GET | `/api/education/questions/` | Banco de questões com filtros curriculares |
+| GET, POST | `/api/education/assignments/` | Lista ou cria atividades |
+| GET, PATCH, DELETE | `/api/education/assignments/{id}/` | Consulta ou administra uma atividade |
+| POST | `/api/education/assignments/{id}/start/` | Inicia ou retoma uma entrega |
+| GET | `/api/education/assignments/{id}/results/` | Resultados disponíveis ao professor criador |
+| POST | `/api/education/student-assignments/{id}/answer/` | Salva uma resposta sem revelar a correção |
+| POST | `/api/education/student-assignments/{id}/submit/` | Entrega e calcula o resultado |
+| GET | `/api/education/review/` | Fila de conteúdos priorizados para revisão |
+| GET | `/api/education/review/errors/` | Caderno de exercícios respondidos incorretamente |
+| GET | `/api/education/recommendations/` | Recomendações do usuário autenticado |
+| GET | `/api/education/recommendations/?classroom={id}&student={id}` | Recomendações do aluno para o professor autorizado |
+| GET | `/api/education/recommendations/lesson-plan/?topic={id}&classroom={id}` | Roteiro com materiais existentes |
 
 Use `Authorization: Bearer <access_token>` nas rotas protegidas. A documentação interativa está em `/api/docs/`.
 

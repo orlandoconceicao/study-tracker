@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { studiesApi } from "../services/studies";
+import { collection, educationApi } from "../services/education";
 
 const formatDuration = (minutes) => {
   const hours = Math.floor(minutes / 60);
@@ -20,7 +21,8 @@ const friendlyError = (error) =>
 
 export default function Studies() {
   const [items, setItems] = useState([]);
-  const [filters, setFilters] = useState({ start_date: "", end_date: "", subject: "" });
+  const [filters, setFilters] = useState({ start_date: "", end_date: "", subject: "", child: "" });
+  const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [removingId, setRemovingId] = useState(null);
@@ -39,7 +41,8 @@ export default function Studies() {
   }, [filters]);
 
   useEffect(() => {
-    load({ start_date: "", end_date: "", subject: "" });
+    educationApi.getChildren().then((response) => setChildren(collection(response))).catch(() => setChildren([]));
+    load({ start_date: "", end_date: "", subject: "", child: "" });
   }, []);
 
   const remove = async (id) => {
@@ -78,6 +81,7 @@ export default function Studies() {
           <label>Data inicial<input type="date" value={filters.start_date} onChange={(event) => setFilters({ ...filters, start_date: event.target.value })} /></label>
           <label>Data final<input type="date" value={filters.end_date} onChange={(event) => setFilters({ ...filters, end_date: event.target.value })} /></label>
           <label>Assunto<input type="text" placeholder="Ex.: Matemática" value={filters.subject} onChange={(event) => setFilters({ ...filters, subject: event.target.value })} /></label>
+          <label>Filho<select value={filters.child} onChange={(event) => setFilters({ ...filters, child: event.target.value })}><option value="">Todos</option>{children.map((child) => <option key={child.id} value={child.id}>{child.name}</option>)}</select></label>
           <button type="submit">Filtrar</button>
         </div>
       </form>
@@ -99,6 +103,7 @@ export default function Studies() {
                 <div className="study-record-content">
                   <div className="study-record-title"><h3>{study.subject}</h3><span>{formatDuration(study.duration_minutes)}</span></div>
                   <p>{formatDate(study.date)}</p>
+                  {study.child_name && <p>Estudo de <strong>{study.child_name}</strong></p>}
                   {study.notes && <p className="study-notes">{study.notes}</p>}
                 </div>
                 <div className="study-actions">

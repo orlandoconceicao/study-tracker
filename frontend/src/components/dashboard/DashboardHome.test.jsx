@@ -1,14 +1,23 @@
 import React from "react";
 import { screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import DashboardHome from "./DashboardHome";
 import { studiesApi } from "../../services/studies";
 import { renderWithProviders } from "../../test/render";
+import { educationApi } from "../../services/education";
 
 vi.mock("../../services/studies", () => ({
   studiesApi: { statistics: vi.fn(), list: vi.fn() },
 }));
 vi.mock("../Calendar", () => ({ default: () => <div>Calendar mock</div> }));
+vi.mock("../../services/education", () => ({
+  collection: (response) => response.data?.results || response.data || [],
+  educationApi: {
+    getChildren: vi.fn().mockResolvedValue({ data: [] }),
+    getChildProgress: vi.fn(),
+    getRecommendations: vi.fn(),
+  },
+}));
 
 const stats = {
   total_studied_days: 3,
@@ -17,6 +26,7 @@ const stats = {
 };
 
 describe("DashboardHome", () => {
+  beforeEach(() => educationApi.getChildren.mockResolvedValue({ data: [] }));
   it("loads the summary and the five most recent studies", async () => {
     studiesApi.statistics.mockResolvedValueOnce({ data: stats });
     studiesApi.list.mockResolvedValueOnce({
