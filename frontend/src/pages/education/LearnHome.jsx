@@ -19,12 +19,27 @@ export default function LearnHome() {
       const [childResponse, levelResponse, gradeResponse] = await Promise.all([educationApi.getChildren(), educationApi.getLevels(), educationApi.getGrades()]);
       const childList = collection(childResponse).filter((child) => child.active); const levelList = collection(levelResponse); const gradeList = collection(gradeResponse);
       const stored = preferredId || localStorage.getItem("study_active_child");
-      const current = childList.find((child) => String(child.id) === String(stored)) || childList[0];
+      let current = childList.find((child) => String(child.id) === String(stored)) || childList[0];
+      let currentSubjects = current?.education_level && current?.grade ? collection(await educationApi.getChildSubjects(current.id)) : [];
+
+      // Ao restaurar a selecao do navegador, priorize um filho cujo curriculo
+      // ja esteja publicado. Uma troca manual continua sendo respeitada.
+      if (!preferredId && current && !currentSubjects.length) {
+        for (const candidate of childList) {
+          if (candidate.id === current.id || !candidate.education_level || !candidate.grade) continue;
+          const candidateSubjects = collection(await educationApi.getChildSubjects(candidate.id));
+          if (candidateSubjects.length) {
+            current = candidate;
+            currentSubjects = candidateSubjects;
+            break;
+          }
+        }
+      }
       setChildren(childList); setLevels(levelList); setGrades(gradeList); setSelectedId(current ? String(current.id) : "");
       if (current) {
         localStorage.setItem("study_active_child", current.id);
         setForm({ name: current.name, education_level: current.education_level || "", grade: current.grade || "" });
-        setSubjects(current.education_level && current.grade ? collection(await educationApi.getChildSubjects(current.id)) : []);
+        setSubjects(currentSubjects);
       } else { setForm(emptyForm); setSubjects([]); }
     } catch { setError("Não foi possível carregar a área de aprendizado."); }
     finally { setLoading(false); }

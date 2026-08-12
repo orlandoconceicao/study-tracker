@@ -72,12 +72,30 @@ def test_task_obeys_user_timezone(mock_now, mock_send, user):
 
 @patch("notifications.tasks.send_study_reminder")
 @patch("notifications.tasks.timezone.now")
-def test_task_skips_wrong_time_invalid_timezone_and_duplicate_day(mock_now, mock_send, user, other_user):
+def test_task_skips_future_time_and_invalid_timezone(mock_now, mock_send, user, other_user):
     mock_now.return_value = datetime(2026, 8, 8, 20, 0, tzinfo=datetime_timezone.utc)
-    UserNotificationSettings.objects.create(user=user, enabled=True, reminder_time=time(19), timezone="UTC")
+    UserNotificationSettings.objects.create(user=user, enabled=True, reminder_time=time(21), timezone="UTC")
     UserNotificationSettings.objects.create(user=other_user, enabled=True, reminder_time=time(20), timezone="Invalid/Zone")
     check_study_reminders()
     mock_send.assert_not_called()
+
+
+@patch("notifications.tasks.send_study_reminder")
+@patch("notifications.tasks.timezone.now")
+def test_task_sends_missed_reminder_when_scheduler_returns_later(mock_now, mock_send, user):
+    mock_now.return_value = datetime(2026, 8, 8, 20, 30, tzinfo=datetime_timezone.utc)
+    setting = UserNotificationSettings.objects.create(user=user, enabled=True, reminder_time=time(19), timezone="UTC")
+    check_study_reminders()
+    setting.refresh_from_db()
+    mock_send.assert_called_once_with(user)
+    assert setting.last_reminder_sent.isoformat() == "2026-08-08"
+
+
+@patch("notifications.views.send_study_reminder", return_value=1)
+def test_authenticated_user_can_send_test_email(mock_send, authenticated_client, user):
+    response = authenticated_client.post("/api/notifications/test/")
+    assert response.status_code == status.HTTP_200_OK
+    mock_send.assert_called_once_with(user)
 
 
 @patch("notifications.tasks.send_study_reminder", side_effect=RuntimeError("SMTP unavailable"))

@@ -15,6 +15,10 @@
   justify-content: center;
 }
 
+.auth-brand .eyebrow {
+  color: var(--color-on-primary-muted);
+}
+
 .auth-logo {
   font-size: 27px;
   font-weight: 700;
@@ -30,7 +34,7 @@
 }
 
 .auth-brand p {
-  color: #d5dcf5;
+  color: var(--color-on-primary-muted);
   max-width: 370px;
   font-size: 17px;
   line-height: 1.6;
@@ -46,8 +50,8 @@
 
 .visual-calendar,
 .visual-progress {
-  background: #ffffff14;
-  border: 1px solid #ffffff2d;
+  background: color-mix(in srgb, var(--color-on-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-on-primary) 22%, transparent);
   border-radius: 18px;
   padding: 18px;
 }
@@ -64,7 +68,7 @@
   height: 18px;
   width: 18px;
   border-radius: 6px;
-  background: #ffffff3b;
+  background: color-mix(in srgb, var(--color-on-primary) 28%, transparent);
 }
 
 .visual-calendar i.done {
@@ -73,7 +77,7 @@
 
 .visual-progress span {
   display: block;
-  color: #d5dcf5;
+  color: var(--color-on-primary-muted);
   font-size: 12px;
   margin-bottom: 4px;
 }
@@ -203,9 +207,9 @@
 }
 
 .auth-submit:hover:not(:disabled) {
-  background: var(--color-primary-dark);
+  background: var(--color-primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px #172a6624;
+  box-shadow: 0 8px 20px var(--color-shadow);
 }
 
 .auth-submit:active:not(:disabled) {
@@ -213,7 +217,9 @@
 }
 
 .auth-submit:disabled {
-  opacity: 0.65;
+  color: var(--color-disabled-text);
+  background: var(--color-disabled-background);
+  opacity: 1;
   cursor: not-allowed;
 }
 

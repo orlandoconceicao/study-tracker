@@ -24,7 +24,9 @@ def check_study_reminders():
         except ZoneInfoNotFoundError:
             logger.warning("Fuso horário inválido para o usuário %s", setting.user_id)
             continue
-        if (local_now.hour, local_now.minute) != (setting.reminder_time.hour, setting.reminder_time.minute):
+        # If the scheduler was briefly offline at the exact minute, send as soon
+        # as it comes back on the same local day instead of losing the reminder.
+        if (local_now.hour, local_now.minute) < (setting.reminder_time.hour, setting.reminder_time.minute):
             continue
         if setting.last_reminder_sent == local_now.date():
             continue

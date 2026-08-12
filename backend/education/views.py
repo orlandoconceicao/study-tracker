@@ -4,6 +4,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 
 from .models import (Assignment, Child, Classroom, ClassroomMembership, DiagnosticAssessment, EducationLevel,
                      EducationProfile, Exercise, ExerciseAttempt, Grade, Lesson, LessonProgress,
@@ -18,7 +19,7 @@ from .serializers import (AssignmentAnswerSerializer, AssignmentSerializer, Chil
                           RecommendationSerializer, StudentAssignmentSerializer, TopicSerializer, UnitSerializer)
 from .review_services import error_notebook, review_queue
 from .recommendation_service import lesson_plan_for_topic, recommendations_for_user
-from .services import (answer_diagnostic, answer_student_assignment, complete_lesson,
+from .services import (answer_diagnostic, answer_student_assignment, complete_lesson, correct_answer_for,
                        diagnostic_result, finish_diagnostic, record_attempt,
                        start_diagnostic, start_student_assignment, submit_student_assignment)
 
@@ -44,7 +45,7 @@ class GradeViewSet(CurriculumViewSet):
 
     @action(detail=True, methods=("get",))
     def subjects(self, request, pk=None):
-        links = self.get_object().grade_subjects.select_related("subject").filter(subject__active=True)
+        links = self.get_object().grade_subjects.select_related("subject").filter(active=True, subject__active=True).annotate(content_count=Count("units__topics", filter=Q(units__topics__status="published"), distinct=True)).order_by("order", "subject__name")
         return Response(GradeSubjectSerializer(links, many=True).data)
 
 
@@ -65,7 +66,7 @@ class ChildViewSet(viewsets.ModelViewSet):
         child = self.get_object()
         if not child.education_level_id or not child.grade_id:
             return Response({"detail": "Complete o perfil escolar do filho."}, status=status.HTTP_409_CONFLICT)
-        links = child.grade.grade_subjects.select_related("subject").filter(subject__active=True)
+        links = child.grade.grade_subjects.select_related("subject").filter(active=True, subject__active=True).annotate(content_count=Count("units__topics", filter=Q(units__topics__status="published"), distinct=True)).order_by("order", "subject__name")
         return Response(GradeSubjectSerializer(links, many=True).data)
 
     @action(detail=True, methods=("get",))
@@ -107,23 +108,70 @@ class SubjectViewSet(CurriculumViewSet):
         grade = request.query_params.get("grade")
         if grade:
             units = units.filter(grade_subject__grade_id=grade)
+        if not request.user.is_staff:
+            units = units.filter(topics__status="published").distinct()
         return Response(UnitSerializer(units, many=True).data)
 
 
 class TopicViewSet(CurriculumViewSet):
-    queryset = Topic.objects.select_related("unit")
+    queryset = Topic.objects.select_related("unit__grade_subject__subject", "unit__grade_subject__grade").prefetch_related("skills")
     serializer_class = TopicSerializer
+
+    def get_queryset(self):
+        queryset = self.queryset
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(status="published")
+        grade_subject = self.request.query_params.get("grade_subject")
+        unit = self.request.query_params.get("unit")
+        if grade_subject:
+            queryset = queryset.filter(unit__grade_subject_id=grade_subject)
+        if unit:
+            queryset = queryset.filter(unit_id=unit)
+        return queryset
 
     @action(detail=True, methods=("get",))
     def lessons(self, request, pk=None):
         # Progress is observational only: every registered lesson stays available.
-        return Response(LessonSerializer(self.get_object().lessons.all(), many=True).data)
+        lessons = self.get_object().lessons.prefetch_related("structured_examples")
+        if not request.user.is_staff:
+            lessons = lessons.filter(status="published")
+        return Response(LessonSerializer(lessons, many=True).data)
 
     @action(detail=True, methods=("get",))
     def exercises(self, request, pk=None):
         # Attempts and diagnostics never gate practice material.
         exercises = self.get_object().exercises.prefetch_related("choices")
+        if not request.user.is_staff:
+            exercises = exercises.filter(status="published")
+        if "page" in request.query_params:
+            paginator = PageNumberPagination()
+            try:
+                requested_size = int(request.query_params.get("page_size", 10))
+            except (TypeError, ValueError):
+                requested_size = 10
+            paginator.page_size = min(max(requested_size, 1), 50)
+            page = paginator.paginate_queryset(exercises, request)
+            return paginator.get_paginated_response(ExerciseSerializer(page, many=True, context={"request": request}).data)
         return Response(ExerciseSerializer(exercises, many=True, context={"request": request}).data)
+
+    @action(detail=True, methods=("get",), permission_classes=(permissions.IsAuthenticated,))
+    def progress(self, request, pk=None):
+        topic = self.get_object()
+        child = child_for_request(request)
+        if not child:
+            return Response({"detail": "Selecione um filho."}, status=status.HTTP_400_BAD_REQUEST)
+        if topic.unit.grade_subject.grade_id != child.grade_id:
+            return Response({"detail": "O conteúdo não pertence à série do filho."}, status=status.HTTP_400_BAD_REQUEST)
+        attempts = ExerciseAttempt.objects.filter(user=request.user, child=child, exercise__topic=topic)
+        attempted = attempts.values("exercise_id").distinct().count()
+        correct = attempts.filter(is_correct=True).count()
+        total_attempts = attempts.count()
+        return Response({
+            "total_exercises": topic.exercises.count(), "exercises_attempted": attempted,
+            "attempts": total_attempts, "correct": correct,
+            "errors": total_attempts - correct,
+            "accuracy_percentage": round(correct * 100 / total_attempts) if total_attempts else 0,
+        })
 
     @action(detail=True, methods=("post",), url_path="diagnostic/start", permission_classes=(permissions.IsAuthenticated,))
     def diagnostic_start(self, request, pk=None):
@@ -135,6 +183,9 @@ class LessonViewSet(CurriculumViewSet):
     queryset = Lesson.objects.select_related("topic")
     serializer_class = LessonSerializer
 
+    def get_queryset(self):
+        return self.queryset if self.request.user.is_staff else self.queryset.filter(status="published", topic__status="published")
+
     @action(detail=True, methods=("post",), permission_classes=(permissions.IsAuthenticated,))
     def complete(self, request, pk=None):
         progress = complete_lesson(request.user, self.get_object(), child_for_request(request))
@@ -145,6 +196,9 @@ class ExerciseViewSet(CurriculumViewSet):
     queryset = Exercise.objects.select_related("topic", "lesson").prefetch_related("choices")
     serializer_class = ExerciseSerializer
 
+    def get_queryset(self):
+        return self.queryset if self.request.user.is_staff else self.queryset.filter(status="published", topic__status="published")
+
     @extend_schema(request=ExerciseAnswerSerializer)
     @action(detail=True, methods=("post",), permission_classes=(permissions.IsAuthenticated,))
     def answer(self, request, pk=None):
@@ -152,6 +206,19 @@ class ExerciseViewSet(CurriculumViewSet):
         serializer.is_valid(raise_exception=True)
         attempt, correct_answer = record_attempt(request.user, self.get_object(), serializer.validated_data["answer"], child_for_request(request))
         return Response({"correct": attempt.is_correct, "correct_answer": correct_answer, "explanation": attempt.exercise.explanation}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=("post",), permission_classes=(permissions.IsAuthenticated,))
+    def reveal(self, request, pk=None):
+        exercise = self.get_object()
+        child = child_for_request(request)
+        if not child:
+            return Response({"detail": "Selecione um filho."}, status=status.HTTP_400_BAD_REQUEST)
+        if exercise.topic.unit.grade_subject.grade_id != child.grade_id:
+            return Response({"detail": "O exercício não pertence à série do filho."}, status=status.HTTP_400_BAD_REQUEST)
+        answer = correct_answer_for(exercise)
+        if exercise.exercise_type == Exercise.Type.MULTIPLE_CHOICE:
+            answer = list(exercise.choices.filter(id__in=answer).values_list("text", flat=True))
+        return Response({"correct_answer": answer, "explanation": exercise.explanation})
 
 
 class ProgressViewSet(viewsets.ReadOnlyModelViewSet):
@@ -162,7 +229,14 @@ class ProgressViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return self.queryset
-        return TopicProgress.objects.filter(user=self.request.user, child=child_for_request(self.request)).select_related("topic")
+        queryset = TopicProgress.objects.filter(user=self.request.user, child=child_for_request(self.request)).select_related("topic")
+        topic = self.request.query_params.get("topic")
+        grade_subject = self.request.query_params.get("grade_subject")
+        if topic:
+            queryset = queryset.filter(topic_id=topic)
+        if grade_subject:
+            queryset = queryset.filter(topic__unit__grade_subject_id=grade_subject)
+        return queryset
 
 
 class EducationProfileViewSet(viewsets.ViewSet):

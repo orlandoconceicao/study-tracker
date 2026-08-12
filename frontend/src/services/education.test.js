@@ -11,6 +11,7 @@ describe("educationApi", () => {
     educationApi.getLevels(); educationApi.getGrades(); educationApi.getGradeSubjects(3);
     educationApi.getUnits(8, 3); educationApi.getTopic(5); educationApi.getTopicLessons(5);
     educationApi.getLesson(7); educationApi.getTopicExercises(5); educationApi.getEducationProgress();
+    educationApi.getTopicSummary(5); educationApi.revealExerciseAnswer(9);
     educationApi.completeLesson(7); educationApi.submitExerciseAnswer(9, "resposta");
     educationApi.getQuestions({ difficulty: "hard" });
     educationApi.createAssignment({ title: "Lista", exercise_ids: [9] });
@@ -22,7 +23,9 @@ describe("educationApi", () => {
     expect(api.get).toHaveBeenCalledWith("/education/levels/");
     expect(api.get).toHaveBeenCalledWith("/education/grades/3/subjects/");
     expect(api.get).toHaveBeenCalledWith("/education/subjects/8/units/", { params: { grade: 3 } });
-    expect(api.get).toHaveBeenCalledWith("/education/topics/5/exercises/");
+    expect(api.get).toHaveBeenCalledWith("/education/topics/5/exercises/", { params: { page: 1, page_size: 20 } });
+    expect(api.get).toHaveBeenCalledWith("/education/topics/5/progress/", { params: { child: undefined } });
+    expect(api.post).toHaveBeenCalledWith("/education/exercises/9/reveal/", { child: undefined });
     expect(api.get).toHaveBeenCalledWith("/education/progress/", { params: { child: undefined } });
     expect(api.post).toHaveBeenCalledWith("/education/lessons/7/complete/", { child: undefined });
     expect(api.post).toHaveBeenCalledWith("/education/exercises/9/answer/", { answer: "resposta", child: undefined });

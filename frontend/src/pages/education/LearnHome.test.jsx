@@ -50,4 +50,20 @@ describe("LearnHome", () => {
     await waitFor(() => expect(localStorage.getItem("study_active_child")).toBe("3"));
     expect(educationApi.getChildSubjects).toHaveBeenCalledWith(3);
   });
+
+  it("recupera um filho com curriculo publicado quando a selecao salva esta vazia", async () => {
+    const children = [
+      { id: 1, name: "Orlando", education_level: 1, grade: 7, grade_name: "7o ano", active: true },
+      { id: 2, name: "Vitor", education_level: 1, grade: 8, grade_name: "8o ano", active: true },
+    ];
+    prepare(children);
+    localStorage.setItem("study_active_child", "2");
+    educationApi.getChildSubjects.mockImplementation((childId) => Promise.resolve({ data: childId === 1 ? [{ id: 10, subject: { id: 3, name: "Matematica", icon: "M" }, content_count: 5 }] : [] }));
+
+    renderWithProviders(<LearnHome />);
+
+    await waitFor(() => expect(localStorage.getItem("study_active_child")).toBe("1"));
+    expect(educationApi.getChildSubjects).toHaveBeenCalledWith(2);
+    expect(educationApi.getChildSubjects).toHaveBeenCalledWith(1);
+  });
 });

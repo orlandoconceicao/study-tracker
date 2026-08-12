@@ -2,17 +2,19 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from rest_framework.test import APIClient
 
-from .models import (Assignment, Child, Classroom, ClassroomMembership, DiagnosticAssessment, EducationLevel, EducationProfile,
-                     Exercise, ExerciseAttempt, ExerciseChoice, Grade, GradeSubject, Lesson, LessonProgress, Subject,
-                     Topic, TopicProgress, Unit)
+from .models import (Assignment, Child, Classroom, ClassroomMembership, Curriculum, DiagnosticAssessment, EducationLevel, EducationProfile,
+                     Example, Exercise, ExerciseAttempt, ExerciseChoice, Grade, GradeSubject, KnowledgeObject, Lesson,
+                     LessonProgress, Skill, Subject, Topic, TopicProgress, Unit)
+from .content_quality import missing_content_fields
 
 
 @pytest.fixture
 def curriculum(db):
-    level = EducationLevel.objects.create(name="Ensino Médio", slug="ensino-medio")
-    grade = Grade.objects.create(education_level=level, name="1º ano", slug="1-ano")
+    level, _ = EducationLevel.objects.get_or_create(name="Ensino Médio", slug="ensino-medio")
+    grade, _ = Grade.objects.get_or_create(education_level=level, name="1º ano", slug="1-ano")
     subject = Subject.objects.create(name="Matemática", slug="matematica")
     grade_subject = GradeSubject.objects.create(grade=grade, subject=subject)
     unit = Unit.objects.create(grade_subject=grade_subject, title="Álgebra")
@@ -87,6 +89,28 @@ def test_open_curriculum_does_not_weaken_child_authorization(curriculum):
 
     assert response.status_code == 404
     assert not ExerciseAttempt.objects.filter(child=child).exists()
+
+
+@pytest.mark.django_db
+def test_parent_can_reveal_answer_and_view_topic_summary_only_for_own_child(curriculum):
+    parent = get_user_model().objects.create_user(username="reveal-parent", email="reveal@example.com", password="password123")
+    outsider = get_user_model().objects.create_user(username="reveal-outsider", email="reveal-outsider@example.com", password="password123")
+    child = Child.objects.create(parent=parent, name="João", education_level=curriculum["level"], grade=curriculum["grade"])
+    client = APIClient(); client.force_authenticate(parent)
+
+    revealed = client.post(f'/api/education/exercises/{curriculum["exercise"].id}/reveal/', {"child": child.id}, format="json")
+    assert revealed.status_code == 200
+    assert revealed.data == {"correct_answer": ["2"], "explanation": "Soma básica"}
+    assert not ExerciseAttempt.objects.filter(child=child).exists()
+
+    client.post(f'/api/education/exercises/{curriculum["exercise"].id}/answer/', {"child": child.id, "answer": curriculum["wrong"].id}, format="json")
+    summary = client.get(f'/api/education/topics/{curriculum["topic"].id}/progress/', {"child": child.id})
+    assert summary.status_code == 200
+    assert summary.data == {"total_exercises": 1, "exercises_attempted": 1, "attempts": 1, "correct": 0, "errors": 1, "accuracy_percentage": 0}
+
+    client.force_authenticate(outsider)
+    assert client.post(f'/api/education/exercises/{curriculum["exercise"].id}/reveal/', {"child": child.id}, format="json").status_code == 404
+    assert client.get(f'/api/education/topics/{curriculum["topic"].id}/progress/', {"child": child.id}).status_code == 404
 
 
 @pytest.mark.django_db
@@ -464,3 +488,119 @@ def test_changing_child_grade_preserves_learning_history(curriculum):
     assert TopicProgress.objects.filter(child=child, topic=curriculum["topic"]).exists()
     assert LessonProgress.objects.filter(child=child, lesson=curriculum["lesson"]).exists()
     assert ExerciseAttempt.objects.filter(child=child, exercise=curriculum["exercise"]).exists()
+
+
+@pytest.mark.django_db
+def test_seed_education_populates_first_grade_curriculum_idempotently():
+    call_command("seed_education")
+    grade = Grade.objects.get(education_level__slug="ensino-fundamental-i", slug="1-ano")
+    math_link = GradeSubject.objects.get(grade=grade, subject__slug="matematica")
+
+    assert grade.grade_subjects.count() == 8
+    assert Topic.objects.filter(unit__grade_subject=math_link).count() == 17
+    assert Topic.objects.filter(unit__grade_subject__grade=grade).count() == 50
+    assert Lesson.objects.filter(topic__unit__grade_subject__grade=grade).count() == 50
+    assert Exercise.objects.filter(topic__unit__grade_subject__grade=grade).count() == 100
+    assert Curriculum.objects.filter(name="BNCC", version="2018", region="Brasil").count() == 1
+    assert Skill.objects.filter(grade=grade).count() == 93
+    assert KnowledgeObject.objects.filter(unit__grade_subject__grade=grade).count() == 51
+    assert Example.objects.filter(lesson__topic__unit__grade_subject__grade=grade).count() == 100
+    assert not Topic.objects.filter(unit__grade_subject__grade=grade, lessons__isnull=True).exists()
+    assert not Topic.objects.filter(unit__grade_subject__grade=grade, exercises__isnull=True).exists()
+
+    counts = (
+        Subject.objects.count(), GradeSubject.objects.count(), Unit.objects.count(), Curriculum.objects.count(),
+        KnowledgeObject.objects.count(), Skill.objects.count(), Topic.objects.count(), Lesson.objects.count(),
+        Example.objects.count(), Exercise.objects.count(), ExerciseChoice.objects.count(),
+    )
+    call_command("seed_education")
+    assert counts == (
+        Subject.objects.count(), GradeSubject.objects.count(), Unit.objects.count(), Curriculum.objects.count(),
+        KnowledgeObject.objects.count(), Skill.objects.count(), Topic.objects.count(), Lesson.objects.count(),
+        Example.objects.count(), Exercise.objects.count(), ExerciseChoice.objects.count(),
+    )
+
+
+@pytest.mark.django_db
+def test_seeded_subject_endpoint_exposes_content_count():
+    call_command("seed_education")
+    parent = get_user_model().objects.create_user(username="seed-parent", password="password123")
+    level = EducationLevel.objects.get(slug="ensino-fundamental-i")
+    grade = Grade.objects.get(education_level=level, slug="1-ano")
+    child = Child.objects.create(parent=parent, name="Lia", education_level=level, grade=grade)
+    client = APIClient()
+    client.force_authenticate(parent)
+
+    response = client.get(f"/api/education/children/{child.id}/subjects/")
+
+    assert response.status_code == 200
+    assert len(response.data) == 7
+    assert all(item["subject"]["slug"] != "ingles" for item in response.data)
+    assert [item["subject"]["name"] for item in response.data] == [
+        "Língua Portuguesa", "Matemática", "Ciências", "História", "Geografia", "Arte", "Educação Física",
+    ]
+    math = next(item for item in response.data if item["subject"]["slug"] == "matematica")
+    assert math["content_count"] == 17
+
+
+@pytest.mark.django_db
+def test_child_subject_endpoint_includes_subject_without_published_content():
+    parent = get_user_model().objects.create_user(username="empty-grade-parent", password="password123")
+    level = EducationLevel.objects.create(name="Nivel de teste", slug="nivel-vazio", order=99)
+    grade = Grade.objects.create(education_level=level, name="Serie de teste", slug="serie-vazia", order=1)
+    subject = Subject.objects.create(name="Materia disponivel", slug="materia-disponivel", active=True)
+    link = GradeSubject.objects.create(grade=grade, subject=subject, active=True)
+    child = Child.objects.create(parent=parent, name="Filho", education_level=level, grade=grade)
+    client = APIClient()
+    client.force_authenticate(parent)
+
+    response = client.get(f"/api/education/children/{child.id}/subjects/")
+
+    assert response.status_code == 200
+    assert len(response.data) == 1
+    assert response.data[0]["id"] == link.id
+    assert response.data[0]["subject"]["id"] == subject.id
+    assert response.data[0]["content_count"] == 0
+
+
+@pytest.mark.django_db
+def test_every_published_topic_has_complete_teaching_material():
+    call_command("seed_education")
+    incomplete = {
+        topic.id: missing_content_fields(topic)
+        for topic in Topic.objects.filter(status="published").prefetch_related(
+            "lessons__structured_examples", "exercises__choices"
+        )
+        if missing_content_fields(topic)
+    }
+    assert incomplete == {}
+
+
+@pytest.mark.django_db
+def test_exercise_list_never_exposes_correct_choice_to_staff(curriculum):
+    staff = get_user_model().objects.create_user(username="curriculum-admin", password="password123", is_staff=True)
+    client = APIClient()
+    client.force_authenticate(staff)
+
+    response = client.get(f'/api/education/topics/{curriculum["topic"].id}/exercises/')
+
+    assert response.status_code == 200
+    assert "is_correct" not in response.data[0]["choices"][0]
+    assert "explanation" not in response.data[0]
+
+
+@pytest.mark.django_db
+def test_draft_curriculum_is_hidden_from_family_users(curriculum, education_client):
+    curriculum["topic"].status = "draft"
+    curriculum["topic"].save(update_fields=("status",))
+
+    assert education_client.get(f'/api/education/topics/{curriculum["topic"].id}/').status_code == 404
+    assert education_client.get(f'/api/education/topics/{curriculum["topic"].id}/lessons/').status_code == 404
+
+
+@pytest.mark.django_db
+def test_validate_education_reports_incomplete_grades(capsys):
+    call_command("validate_education")
+    output = capsys.readouterr().out
+    assert "COBERTURA EDUCACIONAL" in output
+    assert "Série sem matérias publicáveis" in output

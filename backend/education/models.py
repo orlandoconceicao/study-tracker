@@ -13,6 +13,22 @@ class OrderedModel(models.Model):
         abstract = True
 
 
+class Curriculum(models.Model):
+    name = models.CharField(max_length=120)
+    version = models.CharField(max_length=80)
+    source = models.CharField(max_length=200)
+    source_url = models.URLField(max_length=500)
+    region = models.CharField(max_length=120, default="Brasil")
+    active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        ordering = ("name", "version")
+        constraints = [models.UniqueConstraint(fields=("name", "version", "region"), name="unique_curriculum_version_region")]
+
+    def __str__(self):
+        return f"{self.name} — {self.version}"
+
+
 class EducationLevel(OrderedModel):
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=140, unique=True)
@@ -54,6 +70,8 @@ class Subject(OrderedModel):
 class GradeSubject(OrderedModel):
     grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name="grade_subjects")
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="grade_subjects")
+    curriculum = models.ForeignKey(Curriculum, on_delete=models.PROTECT, related_name="grade_subjects", blank=True, null=True)
+    active = models.BooleanField(default=True, db_index=True)
 
     class Meta:
         ordering = ("grade__order", "order", "subject__name")
@@ -75,10 +93,47 @@ class Unit(OrderedModel):
         return self.title
 
 
+class KnowledgeObject(OrderedModel):
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="knowledge_objects")
+    curriculum = models.ForeignKey(Curriculum, on_delete=models.PROTECT, related_name="knowledge_objects")
+    name = models.CharField(max_length=240)
+    description = models.TextField(blank=True)
+    source_url = models.URLField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ("order", "name")
+        constraints = [models.UniqueConstraint(fields=("unit", "name"), name="unique_knowledge_object_per_unit")]
+
+    def __str__(self):
+        return self.name
+
+
+class Skill(OrderedModel):
+    curriculum = models.ForeignKey(Curriculum, on_delete=models.PROTECT, related_name="skills")
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name="skills")
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="skills")
+    code = models.CharField(max_length=30)
+    description = models.TextField()
+    source_url = models.URLField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ("order", "code")
+        constraints = [models.UniqueConstraint(fields=("curriculum", "code"), name="unique_skill_code_per_curriculum")]
+
+    def __str__(self):
+        return self.code
+
+
 class Difficulty(models.TextChoices):
     EASY = "easy", "Fácil"
     MEDIUM = "medium", "Médio"
     HARD = "hard", "Difícil"
+
+
+class PublicationStatus(models.TextChoices):
+    DRAFT = "draft", "Rascunho"
+    REVIEW = "review", "Em revisão"
+    PUBLISHED = "published", "Publicado"
 
 
 class Topic(OrderedModel):
@@ -88,6 +143,9 @@ class Topic(OrderedModel):
     description = models.TextField(blank=True)
     difficulty = models.CharField(max_length=10, choices=Difficulty.choices, default=Difficulty.MEDIUM)
     estimated_minutes = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=12, choices=PublicationStatus.choices, default=PublicationStatus.PUBLISHED, db_index=True)
+    knowledge_objects = models.ManyToManyField(KnowledgeObject, related_name="topics", blank=True)
+    skills = models.ManyToManyField(Skill, related_name="topics", blank=True)
 
     class Meta:
         ordering = ("order", "title")
@@ -101,13 +159,35 @@ class Lesson(OrderedModel):
     topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name="lessons")
     title = models.CharField(max_length=200)
     introduction = models.TextField(blank=True)
+    importance = models.TextField(blank=True)
     explanation = models.TextField()
+    parent_guidance = models.TextField(blank=True)
     examples = models.TextField(blank=True)
+    joint_activity = models.TextField(blank=True)
+    common_mistakes = models.TextField(blank=True)
+    parent_tip = models.TextField(blank=True)
     summary = models.TextField(blank=True)
     estimated_minutes = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=12, choices=PublicationStatus.choices, default=PublicationStatus.PUBLISHED, db_index=True)
 
     class Meta:
         ordering = ("order", "title")
+
+    def __str__(self):
+        return self.title
+
+
+class Example(OrderedModel):
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="structured_examples")
+    title = models.CharField(max_length=200)
+    problem = models.TextField()
+    steps = models.TextField(blank=True)
+    answer = models.TextField(blank=True)
+    explanation = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("order", "id")
+        constraints = [models.UniqueConstraint(fields=("lesson", "order"), name="unique_example_order_per_lesson")]
 
     def __str__(self):
         return self.title
@@ -125,6 +205,7 @@ class Exercise(OrderedModel):
     exercise_type = models.CharField(max_length=20, choices=Type.choices)
     difficulty = models.CharField(max_length=10, choices=Difficulty.choices, default=Difficulty.MEDIUM)
     explanation = models.TextField(blank=True)
+    status = models.CharField(max_length=12, choices=PublicationStatus.choices, default=PublicationStatus.PUBLISHED, db_index=True)
 
     class Meta:
         ordering = ("order", "id")

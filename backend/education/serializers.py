@@ -2,9 +2,9 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import (Assignment, AssignmentExercise, Child, Classroom, ClassroomActivity, ClassroomMembership, DiagnosticAssessment,
-                     DiagnosticResponse, EducationLevel, EducationProfile, Exercise, ExerciseAttempt, ExerciseChoice, Grade,
+                     DiagnosticResponse, EducationLevel, EducationProfile, Example, Exercise, ExerciseAttempt, ExerciseChoice, Grade,
                      GradeSubject, Lesson, LessonProgress, StudentAssignment, StudentAssignmentResponse,
-                     Subject, Topic, TopicProgress, Unit)
+                     Skill, Subject, Topic, TopicProgress, Unit)
 
 
 class EducationLevelSerializer(serializers.ModelSerializer):
@@ -46,10 +46,11 @@ class SubjectSerializer(serializers.ModelSerializer):
 
 class GradeSubjectSerializer(serializers.ModelSerializer):
     subject = SubjectSerializer(read_only=True)
+    content_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = GradeSubject
-        fields = ("id", "grade", "subject", "order")
+        fields = ("id", "grade", "subject", "order", "active", "content_count")
 
 
 class UnitSerializer(serializers.ModelSerializer):
@@ -62,15 +63,28 @@ class UnitSerializer(serializers.ModelSerializer):
 
 
 class TopicSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source="unit.grade_subject.subject.name", read_only=True)
+    grade_name = serializers.CharField(source="unit.grade_subject.grade.name", read_only=True)
+    grade_subject = serializers.IntegerField(source="unit.grade_subject_id", read_only=True)
+    skill_codes = serializers.SlugRelatedField(source="skills", slug_field="code", many=True, read_only=True)
+
     class Meta:
         model = Topic
-        fields = ("id", "unit", "title", "slug", "description", "order", "difficulty", "estimated_minutes")
+        fields = ("id", "unit", "grade_subject", "subject_name", "grade_name", "title", "slug", "description", "order", "difficulty", "estimated_minutes", "status", "skill_codes")
+
+
+class ExampleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Example
+        fields = ("id", "title", "problem", "steps", "answer", "explanation", "order")
 
 
 class LessonSerializer(serializers.ModelSerializer):
+    structured_examples = ExampleSerializer(many=True, read_only=True)
+
     class Meta:
         model = Lesson
-        fields = ("id", "topic", "title", "introduction", "explanation", "examples", "summary", "order", "estimated_minutes")
+        fields = ("id", "topic", "title", "introduction", "importance", "explanation", "parent_guidance", "examples", "structured_examples", "joint_activity", "common_mistakes", "parent_tip", "summary", "order", "estimated_minutes", "status")
 
 
 class PublicExerciseChoiceSerializer(serializers.ModelSerializer):
@@ -79,31 +93,25 @@ class PublicExerciseChoiceSerializer(serializers.ModelSerializer):
         fields = ("id", "text", "order")
 
 
-class StaffExerciseChoiceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ExerciseChoice
-        fields = ("id", "text", "is_correct", "order")
-
-
 class ExerciseSerializer(serializers.ModelSerializer):
     choices = serializers.SerializerMethodField()
 
     class Meta:
         model = Exercise
-        fields = ("id", "topic", "lesson", "statement", "exercise_type", "difficulty", "explanation", "order", "choices")
+        fields = ("id", "topic", "lesson", "statement", "exercise_type", "difficulty", "explanation", "order", "status", "choices")
 
     def get_fields(self):
         fields = super().get_fields()
-        request = self.context.get("request")
-        if not request or not request.user.is_staff:
-            fields.pop("explanation", None)
+        # A explicação da correção pertence ao feedback/reveal, não ao
+        # carregamento inicial da questão.
+        fields.pop("explanation", None)
         return fields
 
     @extend_schema_field(PublicExerciseChoiceSerializer(many=True))
     def get_choices(self, obj):
-        request = self.context.get("request")
-        serializer = StaffExerciseChoiceSerializer if request and request.user.is_staff else PublicExerciseChoiceSerializer
-        return serializer(obj.choices.all(), many=True).data
+        # A resposta correta só pode sair pelos endpoints explícitos de
+        # resposta/revelação, inclusive quando quem navega é um administrador.
+        return PublicExerciseChoiceSerializer(obj.choices.all(), many=True).data
 
     def validate(self, attrs):
         topic = attrs.get("topic", getattr(self.instance, "topic", None))
