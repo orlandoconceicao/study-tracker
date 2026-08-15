@@ -160,3 +160,11 @@ npm run build
 ```
 
 Serviços locais: front-end em http://localhost:5173, back-end em http://localhost:8000 e Swagger em http://localhost:8000/api/docs/.
+
+## Autor
+
+**Orlando Conceição Vilhalba de Almeida**
+
+Desenvolvedor Backend em formação, com foco em Python, Django REST Framework, PostgreSQL e Docker, desenvolvendo também interfaces em React para integração com APIs.
+
+GitHub: [orlandoconceicao](https://github.com/orlandoconceicao)
