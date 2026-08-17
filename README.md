@@ -1,114 +1,144 @@
 # Study Tracker
 
-Aplicação fullstack para acompanhar estudos diários. O back-end usa Django REST Framework e PostgreSQL; o front-end usa React com Vite.
+Plataforma educacional para registrar e acompanhar estudos, organizar conteúdo curricular e disponibilizar recursos de turmas, exercícios e avaliações. O núcleo do projeto é uma API REST em Django REST Framework e PostgreSQL; a interface React consome essa API para oferecer autenticação, acompanhamento de sessões, calendário, estatísticas, lembretes e configurações.
 
-## Estrutura
+O repositório demonstra principalmente competências de desenvolvimento backend: modelagem de dados, autenticação JWT, autorização, construção de APIs, processamento assíncrono e execução em containers.
 
-```text
-.
-├── backend/                 # Django, Celery, testes e dependências Python
-│   ├── config/
-│   ├── notifications/
-│   ├── studies/
-│   ├── tests/
-│   ├── users/
-│   ├── manage.py
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/                # React/Vite
-│   ├── public/
-│   ├── src/
-│   └── package.json
-├── .gitignore
-├── docker-compose.yml
-└── README.md
-```
+## Sobre o projeto
 
-`users` contém o usuário customizado e autenticação. `studies` concentra registros, filtros e serviços de calendário/estatísticas. `notifications` armazena as preferências e tarefas de lembrete. As rotas e regras de negócio não foram alteradas pela reorganização.
+O Study Tracker centraliza o histórico de estudos e transforma os registros em informações como tempo acumulado, frequência e sequências de dias estudados. O backend também possui um domínio educacional para estruturar currículos, disponibilizar aulas e exercícios, registrar progresso e organizar professores e alunos em turmas.
 
-## Módulo educacional
+Atualmente, a aplicação web concentra a experiência de acompanhamento individual. Os recursos educacionais mais amplos estão disponíveis pela API e pelo Django Admin, conforme as permissões de cada usuário.
 
-O app Django `education` organiza o currículo na hierarquia nível de ensino → série → matéria da série → unidade → conteúdo → aula/exercício. Textos de aula são armazenados como texto simples em `TextField`; a aplicação não persiste HTML renderizável.
+## Principais funcionalidades
 
-Usuários autenticados podem consultar o currículo, concluir aulas e responder exercícios. A resposta correta e a explicação não aparecem na consulta do exercício e são reveladas somente após uma tentativa. Usuários `staff` administram o currículo pelo Django Admin (ou pelas operações de escrita da API); usuários comuns recebem `403` nessas operações.
+### Conta e acompanhamento de estudos
 
-O progresso de um conteúdo considera uma parte para cada aula concluída e duas para cada exercício: uma pela tentativa e outra pelo acerto. Ele é recalculado em `education/services.py` após concluir uma aula ou responder um exercício.
+- Cadastro, login e renovação de sessão com tokens JWT.
+- Consulta e atualização do perfil, alteração de senha e desativação da própria conta.
+- Cadastro, edição, consulta, filtros e exclusão de sessões do usuário autenticado.
+- Calendário mensal com dias estudados e minutos acumulados.
+- Estatísticas de tempo, média diária e sequências atual e histórica.
+- Preferências de tema, idioma e meta diária.
+
+### Lembretes
+
+- Configuração de lembrete diário por e-mail, horário e fuso horário.
+- Processamento periódico com Celery e Redis.
+- Controle para evitar mais de um envio no mesmo dia local.
+
+### Conteúdo educacional
+
+- Currículo organizado por nível de ensino, série, matéria, unidade e conteúdo.
+- Aulas, exemplos e exercícios de múltipla escolha, verdadeiro ou falso e resposta curta.
+- Registro de conclusão de aulas, tentativas e progresso por conteúdo.
+- Usuários comuns acessam conteúdo publicado; escritas no currículo exigem usuário `staff`.
 
 ### Professores, alunos e turmas
 
-Em `/classes`, cada usuário escolhe seu perfil educacional como aluno ou professor, sem alterar sua conta ou autenticação. Professores criam turmas vinculadas a uma série, compartilham o código de seis caracteres, publicam atividades referenciando conteúdos existentes e acompanham o desempenho dos alunos. Alunos entram com o código, acessam matérias e atividades e podem sair da turma. Dados de colegas e relatórios de desempenho são visíveis somente ao professor proprietário.
+- Perfil educacional de professor ou aluno.
+- Criação de turmas por professores e ingresso de alunos por código.
+- Atividades vinculadas a conteúdos e acompanhamento do desempenho dos integrantes.
+- Administração da turma restrita ao professor responsável.
 
-### Avaliação diagnóstica
+### Exercícios e avaliações
 
-Antes de estudar um conteúdo, o aluno pode iniciar um diagnóstico de até dez questões reutilizadas do banco de exercícios. As respostas corretas não são enviadas durante a avaliação. Ao final, regras determinísticas classificam o resultado como iniciante, intermediário ou avançado, agrupam pontos fortes e conteúdos para revisão pelas aulas associadas e recomendam uma aula para começar.
+- Banco de questões com filtros curriculares, dificuldade e tipo.
+- Avaliação diagnóstica baseada nos exercícios cadastrados.
+- Atividades com início, armazenamento de respostas, entrega e resultados.
+- Respostas e progresso vinculados ao usuário autenticado.
 
-### Banco de Questões e atividades
+## Tecnologias
 
-O Banco de Questões em `/questions` reutiliza `Exercise` e permite filtrar pela hierarquia curricular, dificuldade e tipo. Professores podem selecionar questões e criar atividades para suas turmas. Alunos acessam as listas em `/activities`, respondem sem receber o gabarito antes da entrega e recebem ao final quantidade de questões, acertos, erros, percentual e tempo utilizado. O professor criador pode consultar os resultados dos alunos.
+### Backend
 
-### Revisão e Caderno de Erros
+- Python, Django 5 e Django REST Framework
+- Simple JWT, django-filter e drf-spectacular
+- Celery
 
-As páginas `/review` e `/review/errors` transformam o histórico existente de `ExerciseAttempt` em uma fila de revisão e um caderno de questões erradas. A prioridade é calculada deterministicamente com quantidade de erros, percentual de acerto, tempo desde a última tentativa e progresso do conteúdo. Refazer uma questão sempre cria uma nova tentativa e preserva o histórico anterior.
+### Frontend
 
-### Recomendações de estudo e ensino
+- React 18, React Router, Vite e Axios
 
-“O que estudar agora?” usa tentativas, progresso, diagnósticos, aulas concluídas e entregas de atividades para priorizar conteúdos sem IA externa. A recomendação principal aparece no Dashboard. Professores acessam `/teaching` para consultar “O que ensinar agora?” por turma e aluno e montar um roteiro determinístico com revisão, explicação, exemplo, exercício guiado, prática independente, correção e resumo. O roteiro utiliza apenas aulas e exercícios cadastrados e sinaliza etapas sem material.
+### Banco de dados
 
-## Endpoints
+- PostgreSQL 16 na configuração Docker
+- Psycopg
 
-| Método | Rota | Descrição |
-|---|---|---|
-| POST | `/api/auth/register/` | Cria a conta |
-| POST | `/api/auth/login/` | Retorna access e refresh JWT |
-| POST | `/api/auth/refresh/` | Renova o access token |
-| GET | `/api/auth/me/` | Usuário autenticado |
-| GET, POST | `/api/studies/` | Lista/cria estudos |
-| GET, PUT, PATCH, DELETE | `/api/studies/{id}/` | Opera um estudo próprio |
-| GET | `/api/studies/calendar/?month=8&year=2026` | Dias e minutos do mês |
-| GET | `/api/studies/statistics/` | Totais e sequências |
-| GET, PATCH | `/api/notifications/settings/` | Lembrete do usuário |
-| GET | `/api/education/levels/` | Lista níveis de ensino |
-| GET | `/api/education/grades/` | Lista séries |
-| GET | `/api/education/subjects/` | Lista matérias ativas |
-| GET | `/api/education/grades/{id}/subjects/` | Matérias de uma série |
-| GET | `/api/education/subjects/{id}/units/?grade={id}` | Unidades da matéria, opcionalmente por série |
-| GET | `/api/education/topics/{id}/` | Detalha um conteúdo |
-| GET | `/api/education/topics/{id}/lessons/` | Aulas do conteúdo |
-| GET | `/api/education/topics/{id}/exercises/` | Exercícios sem gabarito |
-| GET | `/api/education/lessons/{id}/` | Detalha uma aula |
-| POST | `/api/education/lessons/{id}/complete/` | Marca a aula como concluída |
-| POST | `/api/education/exercises/{id}/answer/` | Registra resposta e retorna a correção |
-| GET | `/api/education/progress/` | Progresso do usuário autenticado |
-| GET, PATCH | `/api/education/profile/` | Consulta ou escolhe o perfil educacional |
-| GET, POST | `/api/education/classrooms/` | Lista turmas acessíveis ou cria uma turma |
-| GET, PATCH, DELETE | `/api/education/classrooms/{id}/` | Consulta ou administra uma turma própria |
-| POST | `/api/education/classrooms/join/` | Entra em uma turma usando o código |
-| POST | `/api/education/classrooms/{id}/join/` | Entra em uma turma pelo identificador |
-| POST | `/api/education/classrooms/{id}/leave/` | Sai de uma turma |
-| GET, POST | `/api/education/classrooms/{id}/activities/` | Lista ou publica atividades |
-| GET | `/api/education/classrooms/{id}/performance/` | Desempenho dos alunos para o professor |
-| POST | `/api/education/topics/{id}/diagnostic/start/` | Inicia um diagnóstico do conteúdo |
-| POST | `/api/education/diagnostics/{id}/answer/` | Responde uma questão do diagnóstico |
-| POST | `/api/education/diagnostics/{id}/finish/` | Finaliza e calcula o diagnóstico |
-| GET | `/api/education/diagnostics/{id}/result/` | Consulta o resultado do próprio diagnóstico |
-| GET | `/api/education/questions/` | Banco de questões com filtros curriculares |
-| GET, POST | `/api/education/assignments/` | Lista ou cria atividades |
-| GET, PATCH, DELETE | `/api/education/assignments/{id}/` | Consulta ou administra uma atividade |
-| POST | `/api/education/assignments/{id}/start/` | Inicia ou retoma uma entrega |
-| GET | `/api/education/assignments/{id}/results/` | Resultados disponíveis ao professor criador |
-| POST | `/api/education/student-assignments/{id}/answer/` | Salva uma resposta sem revelar a correção |
-| POST | `/api/education/student-assignments/{id}/submit/` | Entrega e calcula o resultado |
-| GET | `/api/education/review/` | Fila de conteúdos priorizados para revisão |
-| GET | `/api/education/review/errors/` | Caderno de exercícios respondidos incorretamente |
-| GET | `/api/education/recommendations/` | Recomendações do usuário autenticado |
-| GET | `/api/education/recommendations/?classroom={id}&student={id}` | Recomendações do aluno para o professor autorizado |
-| GET | `/api/education/recommendations/lesson-plan/?topic={id}&classroom={id}` | Roteiro com materiais existentes |
+### Infraestrutura
 
-Use `Authorization: Bearer <access_token>` nas rotas protegidas. A documentação interativa está em `/api/docs/`.
+- Docker e Docker Compose
+- Redis 7
+- Celery Worker e Celery Beat
 
-## Execução local
+### Testes
 
-Back-end (a partir da raiz):
+- pytest, pytest-django, pytest-cov e Factory Boy no backend
+- Vitest, Testing Library e jsdom no frontend
+
+## Arquitetura
+
+```text
+React + Vite
+     |
+     | HTTP / JSON
+     v
+Django REST Framework ----> PostgreSQL
+     |
+     +--> Celery Worker <--> Redis
+              ^
+              |
+         Celery Beat
+```
+
+O frontend é um cliente separado da API. O Django REST Framework concentra autenticação, validação, permissões e regras da aplicação, e o PostgreSQL persiste os dados. O Celery Beat agenda a verificação dos lembretes; o worker executa as tarefas usando o Redis.
+
+## Segurança
+
+- A API usa JWT, com access token de 30 minutos e refresh token de 7 dias.
+- As rotas são autenticadas por padrão; cadastro, login e renovação são as exceções públicas necessárias.
+- Estudos, preferências, progresso e avaliações são consultados a partir do usuário autenticado.
+- Turmas só podem ser administradas pelo professor responsável, inclusive os relatórios de desempenho.
+- A listagem de exercícios não serializa o gabarito; a correção é retornada pelas operações específicas de resposta ou revelação.
+- Escritas no currículo exigem usuário `staff`; usuários comuns consultam apenas conteúdo publicado.
+- CORS, origens CSRF confiáveis, hosts, banco, e-mail, Redis e chaves são configurados por ambiente.
+
+## API
+
+A API está organizada em autenticação, conta, estudos, notificações, currículo, progresso, turmas, diagnóstico, banco de questões e atividades. Durante a execução local, o Swagger fica em `http://localhost:8000/api/docs/` e o schema OpenAPI em `/api/schema/`.
+
+[Documentação completa da API](docs/API.md)
+
+## Estrutura do projeto
+
+```text
+study-tracker/
+|-- backend/              # API Django, Celery e testes Python
+|   |-- config/           # Configurações, URLs e Celery
+|   |-- education/        # Currículo, exercícios, turmas e avaliações
+|   |-- notifications/    # Preferências e lembretes
+|   |-- studies/          # Registros, calendário e estatísticas
+|   `-- users/            # Usuário, autenticação e preferências
+|-- frontend/             # Aplicação React/Vite e testes
+|-- docs/                 # Documentação complementar
+|-- docker-compose.yml
+`-- README.md
+```
+
+## Executando o projeto
+
+### Pré-requisitos
+
+- Python compatível com `backend/requirements.txt`
+- Node.js e npm compatíveis com o projeto Vite
+- PostgreSQL e, para os lembretes, Redis
+- ou Docker com Docker Compose
+
+O repositório não fixa versões de Python, Node.js, npm ou Docker; por isso, esta documentação não informa versões específicas desses programas.
+
+### Backend
+
+No PowerShell, a partir da raiz:
 
 ```powershell
 cd backend
@@ -119,9 +149,11 @@ python -m venv .venv
 .\.venv\Scripts\python.exe manage.py runserver
 ```
 
-Preencha `backend/.env` antes de iniciar. O Django lê esse arquivo com base no novo diretório do projeto.
+Antes das migrations, preencha `backend/.env` com `SECRET_KEY` e os dados do PostgreSQL (`DATABASE_NAME`, `DATABASE_USER` e `DATABASE_PASSWORD`). O backend será servido em `http://localhost:8000`.
 
-Front-end, em outro terminal:
+### Frontend
+
+Em outro terminal:
 
 ```powershell
 cd frontend
@@ -130,41 +162,65 @@ npm install
 npm run dev
 ```
 
-Por padrão, `VITE_API_URL` aponta para `http://localhost:8000/api`. O back-end aceita, em desenvolvimento, as origens locais nas portas `5173` e `5174`, tanto com `localhost` quanto com `127.0.0.1`.
+Por padrão, `VITE_API_URL` aponta para `http://localhost:8000/api`, e o Vite atende em `http://localhost:5173`.
 
-## Docker
+### Docker
 
-O Compose permanece na raiz e usa `backend/` e `frontend/` como contextos de build separados:
+Copie `backend/.env.example` para `backend/.env` e defina valores não vazios para `SECRET_KEY` e `DATABASE_PASSWORD`. Depois execute:
 
 ```bash
 docker compose --env-file backend/.env up --build
 ```
 
-Ele inicia PostgreSQL, Redis, Django, Vite, Celery Worker e Celery Beat. Para validar a configuração sem iniciar containers:
+O Compose inicia PostgreSQL, Redis, backend, frontend, Celery Worker e Celery Beat. Para apenas validar a configuração:
 
 ```bash
 docker compose --env-file backend/.env config --quiet
 ```
 
-## Testes e verificações
+## Variáveis de ambiente
+
+Os arquivos `.env.example` documentam os nomes esperados sem fornecer credenciais:
+
+- Aplicação: `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` e `CSRF_TRUSTED_ORIGINS`.
+- PostgreSQL: `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST` e `DATABASE_PORT`.
+- E-mail: `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` e `DEFAULT_FROM_EMAIL`.
+- Processamento: `CELERY_BROKER_URL` e, opcionalmente, `CELERY_RESULT_BACKEND`.
+- Frontend: `VITE_API_URL`.
+
+Não versione arquivos `.env` nem credenciais reais.
+
+## Testes
+
+Backend:
 
 ```powershell
 cd backend
 .\.venv\Scripts\python.exe manage.py check
 .\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run
 .\.venv\Scripts\python.exe -m pytest
+```
 
-cd ..\frontend
+Os testes atuais verificam autenticação e tokens, isolamento de dados, conta e preferências, CRUD de estudos, filtros, calendário, estatísticas, configuração e processamento de lembretes.
+
+Frontend:
+
+```powershell
+cd frontend
 npm test
 npm run build
 ```
 
-Serviços locais: front-end em http://localhost:5173, back-end em http://localhost:8000 e Swagger em http://localhost:8000/api/docs/.
+Os testes cobrem autenticação, contexto de sessão, dashboard, estudos, calendário, estatísticas, configurações, tema e serviços HTTP.
 
 ## Autor
 
 **Orlando Conceição Vilhalba de Almeida**
 
-Desenvolvedor Backend em formação, com foco em Python, Django REST Framework, PostgreSQL e Docker, desenvolvendo também interfaces em React para integração com APIs.
+Desenvolvedor Backend em formação, com foco em Python, Django, Django REST Framework, PostgreSQL, APIs REST e Docker, utilizando React como tecnologia complementar para integração das aplicações.
 
-GitHub: [orlandoconceicao](https://github.com/orlandoconceicao)
+GitHub: [github.com/orlandoconceicao](https://github.com/orlandoconceicao)
+
+LinkedIn: [linkedin.com/in/orlando-conceição-582234315](https://www.linkedin.com/in/orlando-concei%C3%A7%C3%A3o-582234315)
+
+Portfólio: [orlandoconceicao.github.io](https://orlandoconceicao.github.io/)
