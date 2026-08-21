@@ -4,6 +4,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+import dj_database_url
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -95,32 +96,44 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 
 # Database
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get(
-            "DATABASE_NAME",
-            "study_tracker",
-        ),
-        "USER": os.environ.get(
-            "DATABASE_USER",
-            "postgres",
-        ),
-        "PASSWORD": os.environ.get(
-            "DATABASE_PASSWORD",
-            "",
-        ),
-        "HOST": os.environ.get(
-            "DATABASE_HOST",
-            "127.0.0.1",
-        ),
-        "PORT": os.environ.get(
-            "DATABASE_PORT",
-            "5432",
-        ),
-    }
-}
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
+if DATABASE_URL:
+    # Production database (Vercel / Neon / Supabase)
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=0,
+            ssl_require=True,
+        )
+    }
+else:
+    # Local development database
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get(
+                "DATABASE_NAME",
+                "study_tracker",
+            ),
+            "USER": os.environ.get(
+                "DATABASE_USER",
+                "postgres",
+            ),
+            "PASSWORD": os.environ.get(
+                "DATABASE_PASSWORD",
+                "",
+            ),
+            "HOST": os.environ.get(
+                "DATABASE_HOST",
+                "127.0.0.1",
+            ),
+            "PORT": os.environ.get(
+                "DATABASE_PORT",
+                "5432",
+            ),
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = []
