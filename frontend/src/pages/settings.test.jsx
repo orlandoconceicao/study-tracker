@@ -4,14 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Settings from "./settings";
 import api from "../services/api";
-import { educationApi } from "../services/education";
 import { defaultAuth, renderWithProviders } from "../test/render";
 
 vi.mock("../services/api", () => ({ default: { get: vi.fn(), patch: vi.fn(), post: vi.fn(), delete: vi.fn() } }));
-vi.mock("../services/education", () => ({
-  collection: (response) => response.data?.results || response.data || [],
-  educationApi: { getChildren: vi.fn(), getLevels: vi.fn(), getGrades: vi.fn(), createChild: vi.fn(), updateChild: vi.fn(), deleteChild: vi.fn() },
-}));
 
 const loadSettings = () => {
   api.get.mockResolvedValueOnce({ data: { enabled: false, reminder_time: null, timezone: "America/Manaus" } });
@@ -21,9 +16,6 @@ const loadSettings = () => {
 describe("Settings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    educationApi.getChildren.mockResolvedValue({ data: [] });
-    educationApi.getLevels.mockResolvedValue({ data: [] });
-    educationApi.getGrades.mockResolvedValue({ data: [] });
   });
 
   it("carrega e salva lembretes", async () => {
@@ -74,20 +66,4 @@ describe("Settings", () => {
     expect(logout).toHaveBeenCalled();
   });
 
-  it("adiciona filho usando níveis e séries do backend", async () => {
-    loadSettings();
-    educationApi.getLevels.mockResolvedValue({ data: [{ id: 1, name: "Ensino Fundamental II" }] });
-    educationApi.getGrades.mockResolvedValue({ data: [{ id: 7, education_level: 1, name: "7º ano" }, { id: 8, education_level: 2, name: "1º ano" }] });
-    educationApi.createChild.mockResolvedValue({ data: { id: 10, name: "João", education_level: 1, education_level_name: "Ensino Fundamental II", grade: 7, grade_name: "7º ano" } });
-    renderWithProviders(<Settings />, { auth: defaultAuth });
-    await userEvent.click(await screen.findByRole("button", { name: /Adicionar filho/i }));
-    await userEvent.type(screen.getByLabelText("Nome do filho"), "João");
-    await userEvent.selectOptions(screen.getByLabelText("Nível de escolaridade"), "1");
-    expect(screen.getByRole("option", { name: "7º ano" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "1º ano" })).not.toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("Série/Ano"), "7");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar filho" }));
-    await waitFor(() => expect(educationApi.createChild).toHaveBeenCalledWith({ name: "João", birth_date: null, education_level: 1, grade: 7 }));
-    expect(await screen.findByText("Filho adicionado com sucesso.")).toBeInTheDocument();
-  });
 });

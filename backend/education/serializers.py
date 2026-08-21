@@ -1,7 +1,7 @@
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import (Assignment, AssignmentExercise, Child, Classroom, ClassroomActivity, ClassroomMembership, DiagnosticAssessment,
+from .models import (Assignment, AssignmentExercise, Classroom, ClassroomActivity, ClassroomMembership, DiagnosticAssessment,
                      DiagnosticResponse, EducationLevel, EducationProfile, Example, Exercise, ExerciseAttempt, ExerciseChoice, Grade,
                      GradeSubject, Lesson, LessonProgress, StudentAssignment, StudentAssignmentResponse,
                      Skill, Subject, Topic, TopicProgress, Unit)
@@ -17,25 +17,6 @@ class GradeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Grade
         fields = ("id", "education_level", "name", "slug", "order")
-
-
-class ChildSerializer(serializers.ModelSerializer):
-    education_level_name = serializers.CharField(source="education_level.name", read_only=True)
-    grade_name = serializers.CharField(source="grade.name", read_only=True)
-
-    class Meta:
-        model = Child
-        fields = ("id", "name", "birth_date", "education_level", "education_level_name", "grade", "grade_name", "created_at", "active")
-        read_only_fields = ("id", "created_at", "education_level_name", "grade_name")
-
-    def validate(self, attrs):
-        level = attrs.get("education_level", getattr(self.instance, "education_level", None))
-        grade = attrs.get("grade", getattr(self.instance, "grade", None))
-        if bool(level) != bool(grade):
-            raise serializers.ValidationError({"grade": "Informe o nível de ensino e a série/ano."})
-        if level and grade and grade.education_level_id != level.id:
-            raise serializers.ValidationError({"grade": "A série deve pertencer ao nível de ensino selecionado."})
-        return attrs
 
 
 class SubjectSerializer(serializers.ModelSerializer):

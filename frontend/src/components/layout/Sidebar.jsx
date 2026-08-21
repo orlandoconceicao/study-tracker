@@ -4,10 +4,6 @@ import { NavLink } from "react-router-dom";
 const links = [
   ["/dashboard", "Dashboard", "◦"],
   ["/studies", "Estudos", "▤"],
-  ["/learn", "Aprender", "◇"],
-  ["/children", "Meus filhos", "◦"],
-  ["/review", "Revisão", "↻"],
-  ["/support", "Aula de apoio", "▷"],
   ["/statistics", "Estatísticas", "◔"],
   ["/settings", "Configurações", "⚙"],
 ];

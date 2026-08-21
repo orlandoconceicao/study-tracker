@@ -1,9 +1,9 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
 
-from .views import (AssignmentViewSet, ChildViewSet, ClassroomViewSet, DiagnosticAssessmentViewSet,
+from .views import (AssignmentViewSet, ClassroomViewSet, DiagnosticAssessmentViewSet,
                     EducationLevelViewSet, EducationProfileViewSet, QuestionBankViewSet,
-                    RecommendationViewSet, ReviewViewSet, StudentAssignmentViewSet,
+                    StudentAssignmentViewSet,
                     ExerciseViewSet, GradeViewSet, LessonViewSet, ProgressViewSet,
                     SubjectViewSet, TopicViewSet)
 
@@ -15,14 +15,11 @@ router.register("topics", TopicViewSet, basename="education-topic")
 router.register("lessons", LessonViewSet, basename="education-lesson")
 router.register("exercises", ExerciseViewSet, basename="education-exercise")
 router.register("progress", ProgressViewSet, basename="education-progress")
-router.register("children", ChildViewSet, basename="education-child")
 router.register("classrooms", ClassroomViewSet, basename="education-classroom")
 router.register("diagnostics", DiagnosticAssessmentViewSet, basename="education-diagnostic")
 router.register("questions", QuestionBankViewSet, basename="education-question-bank")
 router.register("assignments", AssignmentViewSet, basename="education-assignment")
 router.register("student-assignments", StudentAssignmentViewSet, basename="education-student-assignment")
-router.register("review", ReviewViewSet, basename="education-review")
-router.register("recommendations", RecommendationViewSet, basename="education-recommendation")
 
 profile_view = EducationProfileViewSet.as_view({"get": "list", "patch": "partial_update"})
 urlpatterns = [path("profile/", profile_view, name="education-profile")] + router.urls

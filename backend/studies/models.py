@@ -5,7 +5,6 @@ from django.db import models
 
 class Study(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="studies")
-    child = models.ForeignKey("education.Child", on_delete=models.SET_NULL, related_name="studies", blank=True, null=True)
     date = models.DateField(db_index=True)
     duration_minutes = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     subject = models.CharField(max_length=255, db_index=True)

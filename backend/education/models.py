@@ -228,7 +228,6 @@ class ExerciseChoice(OrderedModel):
 
 class ExerciseAttempt(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="exercise_attempts")
-    child = models.ForeignKey("Child", on_delete=models.CASCADE, related_name="exercise_attempts", blank=True, null=True)
     exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE, related_name="attempts")
     answer = models.JSONField()
     is_correct = models.BooleanField()
@@ -236,12 +235,11 @@ class ExerciseAttempt(models.Model):
 
     class Meta:
         ordering = ("-attempted_at",)
-        indexes = [models.Index(fields=("user", "child", "exercise", "attempted_at"))]
+        indexes = [models.Index(fields=("user", "exercise", "attempted_at"))]
 
 
 class TopicProgress(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="topic_progress")
-    child = models.ForeignKey("Child", on_delete=models.CASCADE, related_name="topic_progress", blank=True, null=True)
     topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name="progress")
     completed = models.BooleanField(default=False)
     completion_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
@@ -251,22 +249,19 @@ class TopicProgress(models.Model):
     class Meta:
         ordering = ("-last_accessed_at",)
         constraints = [
-            models.UniqueConstraint(fields=("user", "topic"), condition=models.Q(child__isnull=True), name="unique_topic_progress_per_user"),
-            models.UniqueConstraint(fields=("user", "child", "topic"), condition=models.Q(child__isnull=False), name="unique_topic_progress_per_user_child"),
+            models.UniqueConstraint(fields=("user", "topic"), name="unique_topic_progress_per_user"),
         ]
 
 
 class LessonProgress(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="lesson_progress")
-    child = models.ForeignKey("Child", on_delete=models.CASCADE, related_name="lesson_progress", blank=True, null=True)
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="progress")
     completed = models.BooleanField(default=False)
     completed_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=("user", "lesson"), condition=models.Q(child__isnull=True), name="unique_lesson_progress_per_user"),
-            models.UniqueConstraint(fields=("user", "child", "lesson"), condition=models.Q(child__isnull=False), name="unique_lesson_progress_per_user_child"),
+            models.UniqueConstraint(fields=("user", "lesson"), name="unique_lesson_progress_per_user"),
         ]
 
 
@@ -281,27 +276,6 @@ class EducationProfile(models.Model):
 
     def __str__(self):
         return f"{self.user} — {self.get_role_display()}"
-
-
-class Child(models.Model):
-    parent = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="children")
-    name = models.CharField(max_length=150)
-    birth_date = models.DateField(blank=True, null=True)
-    education_level = models.ForeignKey(EducationLevel, on_delete=models.PROTECT, related_name="children", blank=True, null=True)
-    grade = models.ForeignKey(Grade, on_delete=models.PROTECT, related_name="children", blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    active = models.BooleanField(default=True, db_index=True)
-
-    class Meta:
-        ordering = ("name", "id")
-        indexes = [models.Index(fields=("parent", "active"))]
-
-    def clean(self):
-        if self.grade_id and self.education_level_id and self.grade.education_level_id != self.education_level_id:
-            raise ValidationError("A série deve pertencer ao nível de ensino informado.")
-
-    def __str__(self):
-        return self.name
 
 
 def classroom_code():
@@ -368,7 +342,6 @@ class DiagnosticAssessment(models.Model):
         ADVANCED = "advanced", "Avançado"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="diagnostic_assessments")
-    child = models.ForeignKey(Child, on_delete=models.CASCADE, related_name="diagnostic_assessments", blank=True, null=True)
     topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name="diagnostic_assessments")
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(blank=True, null=True)

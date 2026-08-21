@@ -4,16 +4,13 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Studies from "./studies";
 import { studiesApi } from "../services/studies";
-import { educationApi } from "../services/education";
 import { renderWithProviders } from "../test/render";
 
 vi.mock("../services/studies", () => ({ studiesApi: { list: vi.fn(), remove: vi.fn() } }));
-vi.mock("../services/education", () => ({ educationApi: { getChildren: vi.fn().mockResolvedValue({ data: [] }) }, collection: (response) => response.data || [] }));
 
 const study = { id: 1, subject: "Matemática", date: "2026-08-08", duration_minutes: 90, notes: "Álgebra" };
 
 describe("Studies", () => {
-  beforeEach(() => educationApi.getChildren.mockResolvedValue({ data: [] }));
   it("renders loading, results and applies filters", async () => {
     studiesApi.list.mockResolvedValue({ data: [study] });
     renderWithProviders(<Studies />, { route: "/studies" });

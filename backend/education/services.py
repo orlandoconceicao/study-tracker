@@ -51,37 +51,37 @@ def check_answer(exercise, answer):
 
 
 @transaction.atomic
-def record_attempt(user, exercise, answer, child=None):
+def record_attempt(user, exercise, answer):
     is_correct = check_answer(exercise, answer)
-    attempt = ExerciseAttempt.objects.create(user=user, child=child, exercise=exercise, answer=answer, is_correct=is_correct)
-    update_topic_progress(user, exercise.topic, child)
+    attempt = ExerciseAttempt.objects.create(user=user, exercise=exercise, answer=answer, is_correct=is_correct)
+    update_topic_progress(user, exercise.topic)
     return attempt, correct_answer_for(exercise)
 
 
 @transaction.atomic
-def complete_lesson(user, lesson, child=None):
-    progress, _ = LessonProgress.objects.get_or_create(user=user, child=child, lesson=lesson)
+def complete_lesson(user, lesson):
+    progress, _ = LessonProgress.objects.get_or_create(user=user, lesson=lesson)
     if not progress.completed:
         progress.completed = True
         progress.completed_at = timezone.now()
         progress.save(update_fields=("completed", "completed_at"))
-    update_topic_progress(user, lesson.topic, child)
+    update_topic_progress(user, lesson.topic)
     return progress
 
 
-def update_topic_progress(user, topic, child=None):
+def update_topic_progress(user, topic):
     lesson_ids = topic.lessons.values_list("id", flat=True)
     exercise_ids = topic.exercises.values_list("id", flat=True)
     lesson_total = topic.lessons.count()
     exercise_total = topic.exercises.count()
-    lessons_done = LessonProgress.objects.filter(user=user, child=child, lesson_id__in=lesson_ids, completed=True).count()
-    attempted = ExerciseAttempt.objects.filter(user=user, child=child, exercise_id__in=exercise_ids).values("exercise_id").distinct().count()
-    correct = ExerciseAttempt.objects.filter(user=user, child=child, exercise_id__in=exercise_ids, is_correct=True).values("exercise_id").distinct().count()
+    lessons_done = LessonProgress.objects.filter(user=user, lesson_id__in=lesson_ids, completed=True).count()
+    attempted = ExerciseAttempt.objects.filter(user=user, exercise_id__in=exercise_ids).values("exercise_id").distinct().count()
+    correct = ExerciseAttempt.objects.filter(user=user, exercise_id__in=exercise_ids, is_correct=True).values("exercise_id").distinct().count()
     possible = lesson_total + (exercise_total * 2)
     earned = lessons_done + attempted + correct
     percentage = Decimal("100.00") if possible == 0 else (Decimal(earned * 100) / Decimal(possible)).quantize(Decimal("0.01"))
     completed = percentage == Decimal("100.00")
-    progress, _ = TopicProgress.objects.get_or_create(user=user, child=child, topic=topic)
+    progress, _ = TopicProgress.objects.get_or_create(user=user, topic=topic)
     progress.completion_percentage = percentage
     progress.completed = completed
     progress.completed_at = progress.completed_at or timezone.now() if completed else None
@@ -90,8 +90,8 @@ def update_topic_progress(user, topic, child=None):
 
 
 @transaction.atomic
-def start_diagnostic(user, topic, child=None):
-    assessment = DiagnosticAssessment.objects.create(user=user, child=child, topic=topic)
+def start_diagnostic(user, topic):
+    assessment = DiagnosticAssessment.objects.create(user=user, topic=topic)
     exercises = list(topic.exercises.filter(choices__is_correct=True).distinct().order_by("order", "difficulty", "id")[:10])
     if len(exercises) < 5:
         assessment.delete()

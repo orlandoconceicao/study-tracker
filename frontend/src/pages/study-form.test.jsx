@@ -5,16 +5,13 @@ import { Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import StudyForm from "./study-form";
 import { studiesApi } from "../services/studies";
-import { educationApi } from "../services/education";
 import { renderWithProviders } from "../test/render";
 
 vi.mock("../services/studies", () => ({ studiesApi: { get: vi.fn(), create: vi.fn(), update: vi.fn() } }));
-vi.mock("../services/education", () => ({ educationApi: { getChildren: vi.fn().mockResolvedValue({ data: [] }) }, collection: (response) => response.data || [] }));
 
 const app = <Routes><Route path="/studies/new" element={<StudyForm />} /><Route path="/studies/:id/edit" element={<StudyForm />} /><Route path="/dashboard" element={<p>Dashboard</p>} /></Routes>;
 
 describe("StudyForm", () => {
-  beforeEach(() => educationApi.getChildren.mockResolvedValue({ data: [] }));
   it("creates a study with numeric duration and navigates", async () => {
     studiesApi.create.mockResolvedValueOnce({});
     renderWithProviders(app, { route: "/studies/new" });
@@ -25,7 +22,7 @@ describe("StudyForm", () => {
     await user.type(screen.getByLabelText("Assunto"), "Django");
     await user.type(screen.getByLabelText(/Observa/i), "Testes");
     await user.click(screen.getByRole("button", { name: "Salvar estudo" }));
-    await waitFor(() => expect(studiesApi.create).toHaveBeenCalledWith({ child: null, date: "2026-08-08", duration_minutes: 45, subject: "Django", notes: "Testes" }));
+    await waitFor(() => expect(studiesApi.create).toHaveBeenCalledWith({ date: "2026-08-08", duration_minutes: 45, subject: "Django", notes: "Testes" }));
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
   });
 

@@ -4,7 +4,6 @@ import pytest
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from rest_framework import status
-from education.models import Child, EducationLevel, Grade
 
 from studies.models import Study
 from studies.permissions import IsStudyOwner
@@ -116,13 +115,3 @@ def test_permission_allows_only_owner(user, other_user):
     request = type("Request", (), {"user": user})()
     assert permission.has_object_permission(request, None, StudyFactory.build(user=user))
     assert not permission.has_object_permission(request, None, StudyFactory.build(user=other_user))
-
-
-def test_study_cannot_be_assigned_to_another_parents_child(authenticated_client, user, other_user):
-    level = EducationLevel.objects.create(name="Fundamental", slug="fundamental-study")
-    grade = Grade.objects.create(education_level=level, name="7º ano", slug="7-ano-study")
-    foreign_child = Child.objects.create(parent=other_user, name="Outro filho", education_level=level, grade=grade)
-    response = authenticated_client.post("/api/studies/", {"child": foreign_child.id, "date": "2026-08-08", "duration_minutes": 30, "subject": "Matemática"}, format="json")
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "child" in response.data
-    assert not Study.objects.filter(user=user, child=foreign_child).exists()

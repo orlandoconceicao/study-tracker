@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { studiesApi } from "../services/studies";
-import { collection, educationApi } from "../services/education";
 
 export default function StudyForm() {
   const { id } = useParams();
@@ -11,24 +10,21 @@ export default function StudyForm() {
     duration_minutes: "",
     subject: "",
     notes: "",
-    child: localStorage.getItem("study_active_child") || "",
   });
-  const [children, setChildren] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    educationApi.getChildren().then((response) => setChildren(collection(response).filter((child) => child.active))).catch(() => setChildren([]));
     if (!id) return;
 
     studiesApi.get(id)
-      .then((response) => setForm({ ...response.data, child: response.data.child || "" }))
+      .then((response) => setForm(response.data))
       .catch(() => setError("Estudo não encontrado."));
   }, [id]);
 
   const submit = async (event) => {
     event.preventDefault();
-    const data = { ...form, child: form.child ? Number(form.child) : null, duration_minutes: Number(form.duration_minutes) };
+    const data = { ...form, duration_minutes: Number(form.duration_minutes) };
 
     try {
       setSaving(true);
@@ -58,7 +54,6 @@ export default function StudyForm() {
 
       <form className="panel study-form" onSubmit={submit}>
         <div className="study-form-fields">
-          <label className="study-subject-field" htmlFor="study-child">Filho<select id="study-child" value={form.child} onChange={(event) => { setForm({ ...form, child: event.target.value }); if (event.target.value) localStorage.setItem("study_active_child", event.target.value); }}><option value="">Estudo do responsável</option>{children.map((child) => <option key={child.id} value={child.id}>{child.name} · {child.grade_name}</option>)}</select></label>
           <label htmlFor="study-date">Data<input id="study-date" type="date" required value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
           <label htmlFor="study-duration">Duração (minutos)<input id="study-duration" type="number" min="1" placeholder="Ex.: 60" required value={form.duration_minutes} onChange={(event) => setForm({ ...form, duration_minutes: event.target.value })} /></label>
           <label className="study-subject-field" htmlFor="study-subject">Assunto<input id="study-subject" type="text" placeholder="Ex.: Matemática" required value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} /></label>

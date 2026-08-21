@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
-import { collection, educationApi } from "../services/education";
 
 const initialReminder = { enabled: false, reminder_time: "", timezone: "America/Cuiaba" };
 const initialPreferences = { theme: "system", language: "pt-BR", daily_study_goal_minutes: 60 };
@@ -12,7 +11,6 @@ const timezones = [
   ["America/Rio_Branco", "Rio Branco (UTC−5)"],
 ];
 const emptyStatus = { text: "", type: "" };
-const emptyChild = { name: "", birth_date: "", education_level: "", grade: "" };
 const message = (error, fallback) => {
   const data = error.response?.data;
   if (typeof data?.detail === "string") return data.detail;
@@ -40,14 +38,6 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState("");
   const [statuses, setStatuses] = useState({});
-  const [children, setChildren] = useState([]);
-  const [levels, setLevels] = useState([]);
-  const [grades, setGrades] = useState([]);
-  const [childForm, setChildForm] = useState(emptyChild);
-  const [editingChild, setEditingChild] = useState(null);
-  const [showChildForm, setShowChildForm] = useState(false);
-  const [deletingChild, setDeletingChild] = useState(null);
-  const [childrenLoading, setChildrenLoading] = useState(true);
   const setStatus = (key, text, type = "success") => setStatuses((old) => ({ ...old, [key]: { text, type } }));
 
   useEffect(() => {
@@ -69,20 +59,11 @@ export default function Settings() {
     const value = { ...initialPreferences, ...authPreferences };
     setPreferences(value); setSavedPreferences(value);
   }, [authPreferences]);
-  useEffect(() => {
-    Promise.all([educationApi.getChildren(), educationApi.getLevels(), educationApi.getGrades()])
-      .then(([childResponse, levelResponse, gradeResponse]) => {
-        setChildren(collection(childResponse)); setLevels(collection(levelResponse)); setGrades(collection(gradeResponse));
-      })
-      .catch((error) => setStatus("children", message(error, "Não foi possível carregar os filhos."), "error"))
-      .finally(() => setChildrenLoading(false));
-  }, []);
 
   const changed = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
   const profileValid = profile.username.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email);
   const passwordValid = passwords.current_password && passwords.new_password.length >= 8 && passwords.new_password === passwords.confirm_password;
   const reminderValid = !reminder.enabled || reminder.reminder_time;
-  const availableGrades = useMemo(() => grades.filter((grade) => String(grade.education_level) === String(childForm.education_level)), [grades, childForm.education_level]);
   const accountLabel = useMemo(() => user?.username ? `Usuário autenticado: ${user.username}` : "Usuário autenticado", [user]);
 
   const submit = async (key, action, success) => {
@@ -96,23 +77,6 @@ export default function Settings() {
   const savePreferences = (event) => { event.preventDefault(); submit("preferences", async () => { const saved = await updatePreferences(preferences); setSavedPreferences({ ...saved }); }, "Preferências atualizadas com sucesso."); };
   const signOut = () => { logout(); navigate("/login", { replace: true }); };
   const deleteAccount = (event) => { event.preventDefault(); submit("delete", async () => { await api.delete("/auth/account/", { data: deleteData }); logout(); navigate("/login", { replace: true }); }, "Conta desativada com sucesso."); };
-  const openChild = (child = null) => {
-    setEditingChild(child);
-    setChildForm(child ? { name: child.name, birth_date: child.birth_date || "", education_level: String(child.education_level || ""), grade: String(child.grade || "") } : emptyChild);
-    setShowChildForm(true); setDeletingChild(null); setStatus("children", "", "");
-  };
-  const saveChild = (event) => { event.preventDefault(); submit("child", async () => {
-    const payload = { ...childForm, education_level: Number(childForm.education_level), grade: Number(childForm.grade), birth_date: childForm.birth_date || null };
-    const response = editingChild ? await educationApi.updateChild(editingChild.id, payload) : await educationApi.createChild(payload);
-    setChildren((current) => editingChild ? current.map((item) => item.id === response.data.id ? response.data : item) : [...current, response.data].sort((a, b) => a.name.localeCompare(b.name)));
-    setShowChildForm(false); setEditingChild(null); setChildForm(emptyChild);
-  }, editingChild ? "Escolaridade atualizada com sucesso." : "Filho adicionado com sucesso."); };
-  const removeChild = () => submit("child-delete", async () => {
-    await educationApi.deleteChild(deletingChild.id);
-    setChildren((current) => current.filter((item) => item.id !== deletingChild.id));
-    if (String(localStorage.getItem("study_active_child")) === String(deletingChild.id)) localStorage.removeItem("study_active_child");
-    setDeletingChild(null);
-  }, "Filho excluído com sucesso.");
 
   return <section className="page-content settings-page">
     <header className="page-hero"><div><span className="eyebrow">PREFERÊNCIAS</span><h1>Configurações</h1><p>Gerencie sua conta, perfil, segurança e preferências.</p></div></header>
@@ -127,13 +91,6 @@ export default function Settings() {
       </form>
       <form className="card settings-section" onSubmit={savePassword}><span className="eyebrow">SEGURANÇA</span><h2>Alterar senha</h2><p className="section-description">Use pelo menos 8 caracteres na nova senha.</p><div className="settings-fields profile-fields"><label>Senha atual<input type="password" autoComplete="current-password" required value={passwords.current_password} onChange={(e) => setPasswords({ ...passwords, current_password: e.target.value })} /></label><label>Nova senha<input type="password" autoComplete="new-password" minLength="8" required value={passwords.new_password} onChange={(e) => setPasswords({ ...passwords, new_password: e.target.value })} /></label><label>Confirmar nova senha<input type="password" autoComplete="new-password" required value={passwords.confirm_password} onChange={(e) => setPasswords({ ...passwords, confirm_password: e.target.value })} /></label></div><Status value={statuses.password || emptyStatus} /><div className="settings-actions"><button disabled={saving === "password" || !passwordValid}>{saving === "password" ? "Alterando..." : "Alterar senha"}</button></div></form>
       <form className="card settings-section" onSubmit={savePreferences}><span className="eyebrow">INTERFACE</span><h2>Preferências</h2><p className="section-description">Personalize sua experiência e sua meta de estudo.</p><div className="settings-fields profile-fields"><label>Tema<select value={preferences.theme} onChange={(e) => setPreferences({ ...preferences, theme: e.target.value })}><option value="system">Usar configuração do sistema</option><option value="light">Claro</option><option value="dark">Escuro</option></select></label><label>Idioma<select value={preferences.language} onChange={(e) => setPreferences({ ...preferences, language: e.target.value })}><option value="pt-BR">Português (Brasil)</option></select></label><label>Meta diária de estudo (minutos)<input type="number" min="1" max="1440" required value={preferences.daily_study_goal_minutes} onChange={(e) => setPreferences({ ...preferences, daily_study_goal_minutes: Number(e.target.value) })} /></label></div><Status value={statuses.preferences || emptyStatus} /><div className="settings-actions"><button disabled={saving === "preferences" || !changed(preferences, savedPreferences)}>{saving === "preferences" ? "Salvando..." : "Salvar preferências"}</button></div></form>
-      <section className="card settings-section children-settings"><span className="eyebrow">FILHOS E ESCOLARIDADE</span><h2>Filhos e escolaridade</h2><p className="section-description">Gerencie a etapa escolar atual sem perder o histórico de estudos.</p>
-        <Status value={statuses["child-delete"]?.text ? statuses["child-delete"] : statuses.child?.text ? statuses.child : statuses.children || emptyStatus} />
-        {childrenLoading ? <p className="muted">Carregando filhos...</p> : <div className="settings-child-list">{children.map((child) => <article key={child.id}><div><strong>{child.name}</strong><span>{child.education_level_name || "Escolaridade não informada"}</span><span>{child.grade_name || "Série/ano não informado"}</span></div><button type="button" className="text-button" onClick={() => openChild(child)}>Editar</button><button type="button" className="text-button danger" onClick={() => { setDeletingChild(child); setShowChildForm(false); }}>Excluir</button></article>)}{!children.length && <p className="muted">Nenhum filho cadastrado.</p>}</div>}
-        {showChildForm && <form className="settings-child-form" onSubmit={saveChild}><h3>{editingChild ? `Editar ${editingChild.name}` : "Adicionar filho"}</h3><div className="settings-fields profile-fields"><label>Nome do filho<input required maxLength="150" value={childForm.name} onChange={(e) => setChildForm({ ...childForm, name: e.target.value })} /></label><label>Data de nascimento (opcional)<input type="date" value={childForm.birth_date} onChange={(e) => setChildForm({ ...childForm, birth_date: e.target.value })} /></label><label>Nível de escolaridade<select required value={childForm.education_level} onChange={(e) => setChildForm({ ...childForm, education_level: e.target.value, grade: "" })}><option value="">Selecionar</option>{levels.map((level) => <option key={level.id} value={level.id}>{level.name}</option>)}</select></label><label>Série/Ano<select required disabled={!childForm.education_level} value={childForm.grade} onChange={(e) => setChildForm({ ...childForm, grade: e.target.value })}><option value="">Selecionar</option>{availableGrades.map((grade) => <option key={grade.id} value={grade.id}>{grade.name}</option>)}</select></label></div><div className="settings-actions split-actions"><button type="button" className="secondary-button" onClick={() => setShowChildForm(false)}>Cancelar</button><button disabled={saving === "child"}>{saving === "child" ? "Salvando..." : "Salvar filho"}</button></div></form>}
-        {deletingChild && <div className="child-delete-confirm" role="alert"><p>Excluir <strong>{deletingChild.name}</strong>? Os dados vinculados a este filho também serão removidos.</p><div className="settings-actions split-actions"><button type="button" className="secondary-button" onClick={() => setDeletingChild(null)}>Cancelar</button><button type="button" className="danger-button" disabled={saving === "child-delete"} onClick={removeChild}>{saving === "child-delete" ? "Excluindo..." : "Confirmar exclusão"}</button></div></div>}
-        {!showChildForm && !deletingChild && <div className="settings-actions"><button type="button" onClick={() => openChild()}>+ Adicionar filho</button></div>}
-      </section>
       <section className="card settings-section account-card"><span className="eyebrow">CONTA E SESSÃO</span><h2>Conta</h2><dl className="account-details"><div><dt>Usuário desde</dt><dd>{dateTime(user?.date_joined)}</dd></div><div><dt>Último acesso</dt><dd>{dateTime(user?.last_login)}</dd></div><div><dt>Sessão</dt><dd>{accountLabel}</dd></div><div><dt>E-mail</dt><dd>{profile.email || "Não informado"}</dd></div></dl><div className="settings-actions"><button type="button" className="secondary-button" onClick={signOut}>Sair da conta</button></div></section>
       <section className="card settings-section danger-zone"><span className="eyebrow">ZONA DE PERIGO</span><h2>Excluir minha conta</h2><p className="section-description">Sua conta será desativada e você perderá o acesso imediatamente.</p>{!showDelete ? <div className="settings-actions"><button type="button" className="danger-button" onClick={() => setShowDelete(true)}>Excluir minha conta</button></div> : <form onSubmit={deleteAccount}><div className="danger-confirmation"><label>Senha atual<input type="password" required value={deleteData.current_password} onChange={(e) => setDeleteData({ ...deleteData, current_password: e.target.value })} /></label><label>Digite EXCLUIR MINHA CONTA<input required value={deleteData.confirmation} onChange={(e) => setDeleteData({ ...deleteData, confirmation: e.target.value })} /></label></div><Status value={statuses.delete || emptyStatus} /><div className="settings-actions split-actions"><button type="button" className="secondary-button" onClick={() => setShowDelete(false)}>Cancelar</button><button className="danger-button" disabled={saving === "delete" || !deleteData.current_password || deleteData.confirmation !== "EXCLUIR MINHA CONTA"}>{saving === "delete" ? "Excluindo..." : "Confirmar exclusão"}</button></div></form>}</section>
     </div>
