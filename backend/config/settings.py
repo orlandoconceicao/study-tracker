@@ -96,7 +96,10 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 
 # Database
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = (
+    os.environ.get("POSTGRES_URL")
+    or os.environ.get("DATABASE_URL")
+)
 
 if DATABASE_URL:
     # Production database (Vercel / Neon / Supabase)
