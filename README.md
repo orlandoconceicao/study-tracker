@@ -4,6 +4,11 @@ Plataforma educacional para registrar e acompanhar estudos, organizar conteúdo 
 
 O repositório demonstra principalmente competências de desenvolvimento backend: modelagem de dados, autenticação JWT, autorização, construção de APIs, processamento assíncrono e execução em containers.
 
+## Projeto online
+
+- [Frontend](https://study-tracker-frontend-eta.vercel.app/)
+- [Backend](https://study-tracker-backend-five.vercel.app/)
+
 ## Sobre o projeto
 
 O Study Tracker centraliza o histórico de estudos e transforma os registros em informações como tempo acumulado, frequência e sequências de dias estudados. O backend também possui um domínio educacional para estruturar currículos, disponibilizar aulas e exercícios, registrar progresso e organizar professores e alunos em turmas.
