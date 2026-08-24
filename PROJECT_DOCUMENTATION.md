@@ -83,7 +83,7 @@ study-tracker/
 │   │   ├── components/  # layout, autenticação, dashboard e calendário
 │   │   ├── context/     # AuthContext
 │   │   ├── hooks/       # useAuth
-│   │   ├── pages/       # estudos, formulário, estatísticas, configurações
+│   │   ├── pages/       # estudos, formulário, estatísticas, configurações e 404
 │   │   ├── services/    # Axios, estudos e tema
 │   │   ├── styles/
 │   │   └── test/        # setup e render auxiliar
@@ -411,15 +411,17 @@ createRoot(document.getElementById("root")).render(
 
 **O que é:** é o mapa entre URL e tela. Ser “principal” aqui significa decidir qual ramo da árvore renderizar, não concentrar toda a lógica.
 
-`Routes` procura uma `Route` compatível. Login e cadastro ficam fora do layout protegido. A route sem `path`, com `element={<Layout />}`, é uma rota-pai: suas filhas aparecem no `<Outlet>` do Layout. O curinga `*` usa `<Navigate>` para levar URLs desconhecidas à dashboard.
+`Routes` procura uma `Route` compatível. Login e cadastro ficam fora do layout protegido. A raiz `/` usa `<Navigate replace>` para levar a entrada do site à dashboard sem manter a URL intermediária no histórico. A route sem `path`, com `element={<Layout />}`, é uma rota-pai: suas filhas aparecem no `<Outlet>` do Layout. O curinga `*` renderiza `NotFound`; assim uma URL realmente inexistente não é confundida com uma página válida.
 
 ```text
 main.jsx
   ↓
 App.jsx escolhe a rota
+  ├─ / → Navigate → /dashboard
   ├─ /login → LoginPage
   ├─ /register → RegisterPage
-  └─ rota privada → Layout → Outlet → página escolhida
+  ├─ rota privada → Layout → Outlet → página escolhida
+  └─ caminho inexistente → NotFound → link para /dashboard
 ```
 
 ### 9.2 Fundamentos de JavaScript e React vistos no código
@@ -546,6 +548,7 @@ submit → preventDefault → API → sucesso/erro → navegação/mensagem
 #### Componentes menores
 
 - `AuthPages.jsx`: contém LoginPage/RegisterPage e o wrapper Shell; coordena estado de formulário e contexto.
+- `not-found.jsx`: fallback público simples; identifica o erro 404 e oferece um `Link` válido para a dashboard, que por sua vez passa pela guarda de autenticação.
 - `AuthInput.jsx`: propaga atributos com `{...props}`, controla visibilidade de senha e expõe `aria-invalid`.
 - `AuthLayout.jsx`: estrutura visual das telas públicas.
 - `Sidebar.jsx`: mapeia configuração de links em `NavLink`; a classe `active` depende da rota.
@@ -605,7 +608,7 @@ Cada arquivo ES Module controla seu escopo. `export default api` permite qualque
 3. Baixa o bundle JavaScript/CSS (em dev, módulos servidos pelo Vite).
 4. `main.jsx` inicializa tema e monta React.
 5. BrowserRouter lê a URL; AuthProvider tenta restaurar a sessão.
-6. App escolhe a rota. Se privada, Layout aguarda `loading`.
+6. App escolhe a rota. `/` redireciona à dashboard, uma rota desconhecida mostra `NotFound` e, se a rota escolhida for privada, Layout aguarda `loading`.
 7. Com token válido, Axios busca usuário/preferências e a página é renderizada; sem usuário, Layout redireciona.
 8. CSS aplica layout, tokens e breakpoint.
 9. Effects da página carregam seus dados; setters causam novas renderizações.
@@ -633,6 +636,7 @@ main.jsx → BrowserRouter → AuthProvider → App → Routes
 
 | Rota | Componente | Acesso/dados |
 | --- | --- | --- |
+| `/` | `Navigate` | redirecionamento explícito e substitutivo para `/dashboard` |
 | `/login` | `LoginPage` | pública; login JWT |
 | `/register` | `RegisterPage` | pública; cadastro |
 | `/dashboard` | `DashboardHome` | Layout protegido; estatísticas, estudos e calendário |
@@ -641,7 +645,7 @@ main.jsx → BrowserRouter → AuthProvider → App → Routes
 | `/studies/:id/edit` | `StudyForm` | detalhe + patch |
 | `/statistics` | `Statistics` | agregados |
 | `/settings` | `Settings` | perfil, preferências, lembrete, senha e conta |
-| qualquer outra | `Navigate` | redireciona a dashboard e então Layout decide login |
+| `*` (qualquer outra) | `NotFound` | fallback público 404; informa que a URL não existe e oferece retorno à dashboard |
 
 Não há páginas para `education`. `Layout` é o guarda de rotas privadas: espera o carregamento do contexto e redireciona se `user` for nulo.
 
@@ -875,7 +879,7 @@ Não há script lint nem ESLint configurado. O build usa `index.html` e `src/mai
 
 Backend tem testes duplicados entre arquivos legados por app e suíte `backend/tests`. Cobrem registro/login/refresh, payloads, isolamento, perfil/senha/preferências/desativação; Study model/serializer/CRUD/filtros/calendário/estatísticas/permissão; notificações, timezone, falha e deduplicação. Não foram encontrados testes para o grande app `education`.
 
-Frontend possui testes para API client, studies service, AuthContext, login/cadastro, guarda de Layout, dashboard/recentes/calendário, páginas de estudos/formulário/estatísticas/configurações, tema e contraste. Não existe teste E2E navegador.
+Frontend possui testes para API client, studies service, AuthContext, login/cadastro, guarda de Layout, dashboard/recentes/calendário, páginas de estudos/formulário/estatísticas/configurações, fallback 404, tema e contraste. `not-found.test.jsx` verifica o título acessível e se o link de retorno aponta para `/dashboard`. Não existe teste E2E em navegador real.
 
 Comandos:
 
@@ -892,7 +896,7 @@ npm run test:coverage
 npm run build
 ```
 
-Nesta auditoria, o backend não executou porque o ambiente disponibilizava apenas o alias indisponível da Microsoft Store para Python. Vitest/build foram bloqueados pelo sandbox quando esbuild tentou ler diretórios ancestrais. Isso não comprova defeito do código. A validação Compose com `.env.example` recusou corretamente `DATABASE_PASSWORD` vazia.
+Na validação atual, `python -m pytest` foi executado pelo ambiente virtual existente e aprovou **53 testes backend**; `npm test` aprovou **41 testes em 15 arquivos frontend**. O frontend emite apenas avisos das future flags do React Router 7, não falhas. `npm run build` também concluiu, transformou 104 módulos e gerou `dist`. A validação Compose com `.env.example` recusou corretamente `DATABASE_PASSWORD` vazia.
 
 ## 15. Deploy e produção
 
@@ -964,6 +968,7 @@ Performance real: índices em datas/assunto/status/ordem e compostos; `select_re
 | 404 de ID existente | queryset pode ocultar recurso de outro usuário; confira ownership |
 | Swagger/Admin sem estilo | deploy não possui estratégia de staticfiles confirmada |
 | rota React retorna 404 ao atualizar | host precisa fallback de SPA para `index.html` |
+| URL React inexistente mostra “Página não encontrada” | comportamento esperado do `*`; use o link para a dashboard ou corrija a URL de origem |
 | migration pendente | `showmigrations`, `makemigrations --check --dry-run`, depois `migrate` |
 | diagnóstico recusa iniciar | tópico precisa de ao menos cinco exercícios com alternativa correta |
 | review/recommendation gera erro | código legado usa `child` removido e não está roteado |
@@ -978,7 +983,7 @@ O `.gitignore` não apaga arquivos: apenas orienta o Git a não rastreá-los. `n
 
 ```powershell
 git status
-git diff -- ESTUDO_DO_PROJETO.md
+git diff -- PROJECT_DOCUMENTATION.md
 
 # Django
 python manage.py shell
@@ -1364,7 +1369,7 @@ O primeiro comando baixa o scaffolder oficial do ecossistema Vite, cria package.
 
 1. `frontend/index.html`: idioma, título, favicon, root e script.
 2. `src/main.jsx`: CSS global, BrowserRouter, provider e App.
-3. `src/App.jsx`: rotas públicas/privadas.
+3. `src/App.jsx`: raiz, rotas públicas/privadas e fallback `*`; `src/pages/not-found.jsx`: página 404 com retorno válido.
 4. `src/components/Layout.jsx` e Sidebar: casca reutilizável.
 5. páginas estáticas mínimas: login, dashboard e estudos.
 6. somente depois: services, estado assíncrono e formulários.
@@ -1388,7 +1393,7 @@ Por que evoluir assim? Se começarmos com autenticação, drawer, CSS e roteamen
 - `/login` renderiza sem Layout;
 - `/dashboard` sem user redireciona;
 - com contexto autenticado, sidebar e conteúdo aparecem;
-- rota desconhecida vai à dashboard;
+- `/` redireciona à dashboard, enquanto uma rota desconhecida mostra o 404 e oferece retorno;
 - menu fecha ao navegar.
 
 ### Checkpoint
@@ -1789,7 +1794,7 @@ Faça em uma branch ou apenas leia/simule quando não quiser alterar arquivos.
 
 1. Abra `frontend/index.html` e identifique o nó que recebe React, idioma, título e favicon.
 2. Em `frontend/src/main.jsx`, desenhe a árvore de providers do mais externo ao mais interno.
-3. Em `frontend/src/App.jsx`, escolha `/studies/15/edit` e descreva quais componentes serão montados.
+3. Em `frontend/src/App.jsx`, compare `/`, `/studies/15/edit` e `/caminho-inexistente`: descreva redirecionamento, componentes montados e guarda de autenticação em cada caso.
 4. Em `Calendar.jsx`, altere mentalmente mês/ano e explique por que a API é chamada novamente.
 5. Em `StatCard.jsx`, liste quais valores vêm por props e qual possui default.
 6. Use DevTools para mudar temporariamente `data-theme` do `<html>` e observe quais tokens CSS entram em ação.
@@ -1835,7 +1840,7 @@ Faça em uma branch ou apenas leia/simule quando não quiser alterar arquivos.
 
 ## 24. Referências auditadas
 
-Principais arquivos: `README.md`, `docs/API.md`, `docs/EDUCATION_CONTENT.md`, `.gitignore`, `docker-compose.yml`; todo `backend/config`; requirements/Dockerfile/examples de ambiente; models, serializers, views, URLs, permissions, services, tasks, admin, migrations, tests e management commands dos quatro apps; `frontend/package.json`, Vite/Docker/env, `src/main.jsx`, `App.jsx`, context, hook, services, páginas, componentes, estilos e testes.
+Principais arquivos: `README.md`, `docs/API.md`, `docs/EDUCATION_CONTENT.md`, `.gitignore`, `docker-compose.yml`; todo `backend/config`; requirements/Dockerfile/examples de ambiente; models, serializers, views, URLs, permissions, services, tasks, admin, migrations, tests e management commands dos quatro apps; `frontend/package.json`, Vite/Docker/env, `src/main.jsx`, `App.jsx`, context, hook, services, páginas — incluindo `not-found.jsx` —, componentes, estilos e testes.
 
 Partes não encontradas ou impossíveis de confirmar: provedor real do banco e Redis de produção, pooling externo, configuração reproduzível Vercel, comando de deploy/migrations, servidor produtivo, CI/CD, terminação HTTPS detalhada, monitoramento, rate limiting, cache, Channels/WebSockets, mídia e cobertura percentual atual.
 
