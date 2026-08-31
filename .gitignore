@@ -1,10 +1,17 @@
-# Secrets and local environment (keep templates)
+# Environment / Secrets
 .env
 .env.*
 !.env.example
-**/.env
-**/.env.*
-!**/.env.example
+!.env.template
+!.env.sample
+*.key
+*.pem
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+!credentials.example.json
+!secrets.example.json
 
 # Python / Django
 .venv/
@@ -18,7 +25,8 @@ __pycache__/
 .Python
 .python-version
 pip-wheel-metadata/
-*.log
+*.egg-info/
+.eggs/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -44,12 +52,17 @@ node_modules/
 dist/
 coverage/
 .vite/
-.vercel/
 *.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Logs
+*.log
+
+# Deployment / Tools
+.vercel/
 
 # Editors and operating systems
 .vscode/
@@ -58,3 +71,9 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
